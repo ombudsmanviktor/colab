@@ -299,7 +299,7 @@ function ProfileDialog({ open, onOpenChange, email, profile, isAdmin, isAdminUse
 
 function ProfileCard({
   email, profile, isAdmin, isAdminUser, canEdit, isSelf,
-  onEdit, onRemove, onToggleAdmin,
+  onEdit, onRemove,
 }: {
   email: string
   profile: UserProfile | undefined
@@ -309,7 +309,6 @@ function ProfileCard({
   isSelf: boolean
   onEdit: () => void
   onRemove: () => void
-  onToggleAdmin: (checked: boolean) => void
 }) {
   const awaiting = !profile?.nome
 
@@ -551,7 +550,6 @@ export function Usuarios() {
               isSelf={email === myEmail}
               onEdit={() => openEdit(email)}
               onRemove={() => handleRemoveUser(email)}
-              onToggleAdmin={(checked) => handleToggleAdmin(email, checked)}
             />
           ))}
         </div>
