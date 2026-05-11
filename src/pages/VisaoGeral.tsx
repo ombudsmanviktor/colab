@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { loadAllUserTasks, loadAllProfiles, saveUserTasks, loadUsersIndex, generateId } from '@/lib/storage'
+import { notifyTaskEvent } from '@/lib/emailjs'
 import { emailInitials, emailSlug, todayISO } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -293,12 +294,13 @@ function TaskRow({
 // ─── User Block ───────────────────────────────────────────────────────────
 
 function UserBlock({
-  userTasks, profile, canEdit, allFronts, onSave,
+  userTasks, profile, canEdit, allFronts, adminEmails, onSave,
 }: {
   userTasks: UserTasks
   profile: UserProfile | undefined
   canEdit: boolean
   allFronts: string[]
+  adminEmails: string[]
   onSave: (ut: UserTasks) => void
 }) {
   const [current, setCurrent] = useState<UserTasks>(userTasks)
@@ -317,10 +319,15 @@ function UserBlock({
   function handleToggle(id: string) {
     if (!canEdit) return
     const now = new Date().toISOString()
+    const task = current.tasks.find(t => t.id === id)
+    const completing = task && !task.completed
     const tasks = current.tasks.map(t =>
       t.id === id ? { ...t, completed: !t.completed, completedAt: !t.completed ? now : undefined } : t
     )
     update({ ...current, tasks })
+    if (completing && task) {
+      notifyTaskEvent({ eventType: 'completed', taskTitle: task.title, taskOwnerEmail: current.email, adminEmails }).catch(() => {})
+    }
   }
 
   function handleChangeTitle(id: string, title: string) {
@@ -328,8 +335,12 @@ function UserBlock({
   }
 
   function handleChangeDate(id: string, dueDate: string) {
+    const task = current.tasks.find(t => t.id === id)
     const tasks = current.tasks.map(t => t.id === id ? { ...t, dueDate: dueDate || undefined } : t)
     update({ ...current, tasks })
+    if (dueDate && task) {
+      notifyTaskEvent({ eventType: 'date_set', taskTitle: task.title, taskOwnerEmail: current.email, dueDate, adminEmails }).catch(() => {})
+    }
   }
 
   function handleChangeFront(id: string, front: string) {
@@ -347,6 +358,21 @@ function UserBlock({
     const ut = { ...current, tasks }
     setCurrent(ut)
     onSave(ut)
+
+    if (newTaskId) {
+      const created = tasks.find(t => t.id === newTaskId)
+      if (created) {
+        notifyTaskEvent({ eventType: 'created', taskTitle: created.title, taskOwnerEmail: current.email, dueDate: created.dueDate, adminEmails }).catch(() => {})
+      }
+    } else {
+      // Detect title edits on existing tasks
+      tasks.forEach(task => {
+        const orig = userTasks.tasks.find(o => o.id === task.id)
+        if (orig && orig.title !== task.title && task.title.trim()) {
+          notifyTaskEvent({ eventType: 'edited', taskTitle: task.title, taskOwnerEmail: current.email, adminEmails }).catch(() => {})
+        }
+      })
+    }
     setNewTaskId(null)
   }
 
@@ -732,6 +758,7 @@ export function VisaoGeral() {
   const [allTasks, setAllTasks] = useState<UserTasks[]>([])
   const [profiles, setProfiles] = useState<UserProfile[]>([])
   const [emails, setEmails] = useState<string[]>([])
+  const [adminEmails, setAdminEmails] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [embedOpen, setEmbedOpen] = useState(false)
   const [viewMode, setViewMode] = useState<ViewMode>('user')
@@ -746,6 +773,7 @@ export function VisaoGeral() {
           loadAllProfiles(),
         ])
         setEmails(idx.emails)
+        setAdminEmails(idx.admins ?? [])
         setAllTasks(tasks)
         setProfiles(profs)
         if (session?.email) {
@@ -753,6 +781,22 @@ export function VisaoGeral() {
           const ut = existing ?? { email: session.email, tasks: [], lastAccess: new Date().toISOString() }
           saveUserTasks({ ...ut, lastAccess: new Date().toISOString() }).catch(() => {})
         }
+
+        // Check for approaching deadlines (dueDate = tomorrow)
+        const tomorrow = addDays(1)
+        const today = todayISO()
+        const NOTIFY_KEY = 'colab_notified_approaching'
+        const notified: Record<string, string> = JSON.parse(localStorage.getItem(NOTIFY_KEY) ?? '{}')
+        const admins = idx.admins ?? []
+        for (const ut of tasks) {
+          for (const task of ut.tasks) {
+            if (!task.completed && task.dueDate === tomorrow && notified[task.id] !== today) {
+              notifyTaskEvent({ eventType: 'deadline_approaching', taskTitle: task.title, taskOwnerEmail: ut.email, dueDate: task.dueDate, adminEmails: admins }).catch(() => {})
+              notified[task.id] = today
+            }
+          }
+        }
+        localStorage.setItem(NOTIFY_KEY, JSON.stringify(notified))
       } catch {
         toast({ title: 'Erro ao carregar dados', variant: 'destructive' })
       } finally {
@@ -806,6 +850,7 @@ export function VisaoGeral() {
       front: front !== 'Sem frente' ? front : undefined,
     }
     handleSave({ ...existing, tasks: [...existing.tasks, newTask] })
+    notifyTaskEvent({ eventType: 'created', taskTitle: newTask.title, taskOwnerEmail: email, adminEmails }).catch(() => {})
   }
 
   if (loading) return (
@@ -874,6 +919,7 @@ export function VisaoGeral() {
                     profile={profileMap.get(email)}
                     canEdit={canEdit}
                     allFronts={allFronts}
+                    adminEmails={adminEmails}
                     onSave={handleSave}
                   />
                 )
