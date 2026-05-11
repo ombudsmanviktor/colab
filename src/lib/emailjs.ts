@@ -52,7 +52,7 @@ export async function sendLeituraNotification(params: {
         cfg.serviceId,
         cfg.templateId,
         {
-          from_email: 'noreply@colab.app',
+          from_email: params.senderEmail,
           sender_email: params.senderEmail,
           to_email: to,
           module_name: 'Leituras Recomendadas',
