@@ -27,16 +27,31 @@ export function clearEmailJSConfig(): void {
   localStorage.removeItem(EMAILJS_KEY)
 }
 
-// ─── Generic send ─────────────────────────────────────────────────────────
+// ─── Generic send (uses the same template variables as leitura) ───────────
 
-async function sendEmail(toEmail: string, subject: string, body: string): Promise<void> {
+async function sendEmail(params: {
+  toEmail: string
+  fromEmail: string
+  moduleName: string
+  excerpt: string
+  meetingDate: string
+  notificationType: string
+}): Promise<void> {
   const cfg = getEmailJSConfig()
   if (!cfg) return
   try {
     await emailjs.send(
       cfg.serviceId,
       cfg.templateId,
-      { to_email: toEmail, from_email: 'coLAB', subject, body },
+      {
+        to_email: params.toEmail,
+        from_email: params.fromEmail,
+        sender_email: params.fromEmail,
+        module_name: params.moduleName,
+        excerpt: params.excerpt,
+        meeting_date: params.meetingDate,
+        notification_type: params.notificationType,
+      },
       cfg.publicKey,
     )
   } catch (err) {
@@ -48,47 +63,17 @@ async function sendEmail(toEmail: string, subject: string, body: string): Promis
 
 type TaskEventType = 'created' | 'edited' | 'completed' | 'date_set' | 'deadline_approaching'
 
-function formatDue(dueDate?: string): string {
-  if (!dueDate) return ''
-  return new Date(dueDate + 'T12:00:00').toLocaleDateString('pt-BR')
+const TASK_EVENT_LABELS: Record<TaskEventType, string> = {
+  created:              'Nova tarefa criada',
+  edited:               'Tarefa editada',
+  completed:            'Tarefa concluída',
+  date_set:             'Prazo definido',
+  deadline_approaching: 'Prazo se aproximando (amanhã)',
 }
 
-function buildTaskEmail(
-  eventType: TaskEventType,
-  taskTitle: string,
-  taskOwnerEmail: string,
-  dueDate?: string,
-): { subject: string; body: string } {
-  const due = dueDate ? `\nPrazo: ${formatDue(dueDate)}` : ''
-  const owner = `Responsável: ${taskOwnerEmail}`
-
-  switch (eventType) {
-    case 'created':
-      return {
-        subject: '[coLAB] Nova tarefa criada',
-        body: `Uma nova tarefa foi criada:\n\n"${taskTitle}"\n\n${owner}${due}`,
-      }
-    case 'edited':
-      return {
-        subject: '[coLAB] Tarefa editada',
-        body: `Uma tarefa foi editada:\n\n"${taskTitle}"\n\n${owner}${due}`,
-      }
-    case 'completed':
-      return {
-        subject: '[coLAB] Tarefa concluída',
-        body: `A seguinte tarefa foi marcada como concluída:\n\n"${taskTitle}"\n\n${owner}`,
-      }
-    case 'date_set':
-      return {
-        subject: '[coLAB] Prazo definido',
-        body: `Um prazo foi definido para a tarefa:\n\n"${taskTitle}"\n\n${owner}${due}`,
-      }
-    case 'deadline_approaching':
-      return {
-        subject: '[coLAB] Prazo se aproximando',
-        body: `O prazo da seguinte tarefa é amanhã:\n\n"${taskTitle}"\n\n${owner}${due}`,
-      }
-  }
+function formatDue(dueDate?: string): string {
+  if (!dueDate) return '—'
+  return new Date(dueDate + 'T12:00:00').toLocaleDateString('pt-BR')
 }
 
 export async function notifyTaskEvent(params: {
@@ -99,12 +84,22 @@ export async function notifyTaskEvent(params: {
   adminEmails: string[]
 }): Promise<void> {
   if (!getEmailJSConfig()) return
-  const { subject, body } = buildTaskEmail(
-    params.eventType, params.taskTitle, params.taskOwnerEmail, params.dueDate,
-  )
-  // Recipients: task owner + admins, deduplicated
-  const recipients = [...new Set([params.taskOwnerEmail, ...params.adminEmails])]
-  await Promise.allSettled(recipients.map(to => sendEmail(to, subject, body)))
+  const { eventType, taskTitle, taskOwnerEmail, dueDate, adminEmails } = params
+
+  const recipients = [...new Set([taskOwnerEmail, ...adminEmails])]
+  const excerpt = `${TASK_EVENT_LABELS[eventType]}: "${taskTitle}" — Responsável: ${taskOwnerEmail}`
+  const meetingDate = dueDate ? `Prazo: ${formatDue(dueDate)}` : ''
+
+  await Promise.allSettled(recipients.map(to =>
+    sendEmail({
+      toEmail: to,
+      fromEmail: taskOwnerEmail,
+      moduleName: 'Visão Geral — Tarefas',
+      excerpt: excerpt.slice(0, 300),
+      meetingDate,
+      notificationType: eventType,
+    }),
+  ))
 }
 
 // ─── Leitura notification ─────────────────────────────────────────────────
@@ -126,10 +121,16 @@ export async function sendLeituraNotification(params: {
     params.leituraSource ? `— ${params.leituraSource}` : '',
   ].filter(Boolean).join(' ').slice(0, 300)
 
-  const subject = '[coLAB] Nova leitura recomendada'
-  const body = `Uma nova leitura foi adicionada ao coLAB por ${params.senderEmail}:\n\n${excerpt}\n\nReunião: ${params.meetingDate}`
-
   await Promise.allSettled(
-    params.recipientEmails.map(to => sendEmail(to, subject, body)),
+    params.recipientEmails.map(to =>
+      sendEmail({
+        toEmail: to,
+        fromEmail: params.senderEmail,
+        moduleName: 'Leituras Recomendadas',
+        excerpt,
+        meetingDate: params.meetingDate,
+        notificationType: 'leitura',
+      }),
+    ),
   )
 }
