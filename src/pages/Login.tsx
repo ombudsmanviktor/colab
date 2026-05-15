@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { loadStaticConfig, type AppRepoConfig } from '@/lib/appConfig'
+import { getGitHubConfig } from '@/lib/github'
 import type { GitHubConfig } from '@/lib/github'
 
 const AppLogo = () => (
@@ -49,7 +50,16 @@ export function Login() {
 
   useEffect(() => {
     loadStaticConfig().then(cfg => {
-      setAppConfig(cfg)
+      if (cfg) {
+        setAppConfig(cfg)
+      } else {
+        // Fallback: if this device has a previously saved GitHub config in localStorage,
+        // use its owner/repo/branch so returning users only need email + PAT.
+        const saved = getGitHubConfig()
+        if (saved?.owner && saved?.repo && saved?.branch) {
+          setAppConfig({ owner: saved.owner, repo: saved.repo, branch: saved.branch })
+        }
+      }
       setConfigLoading(false)
     })
   }, [])

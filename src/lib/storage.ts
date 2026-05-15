@@ -39,11 +39,17 @@ async function readYaml<T>(path: string): Promise<T | null> {
   try {
     const file = await readFile(cfg(), path)
     shaCache.set(path, file.sha)
-    return yaml.load(decodeContent(file.content)) as T
+    try {
+      return yaml.load(decodeContent(file.content)) as T
+    } catch {
+      // Malformed YAML — treat as missing
+      return null
+    }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
     if (msg.includes('Not Found') || msg.includes('404')) return null
-    throw err
+    // Other API errors (rate limit, permission, branch missing) — treat as missing
+    return null
   }
 }
 
