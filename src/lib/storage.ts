@@ -11,6 +11,7 @@ import {
   type GitHubConfig,
 } from './github'
 import type { UsersIndex, UserTasks, UserProfile, OrdemDoDia, AtaDecisao, Leitura } from '@/types'
+import type { AppRepoConfig } from '@/lib/appConfig'
 import { emailSlug, generateId } from './utils'
 import {
   isDemoMode,
@@ -257,8 +258,6 @@ export async function deleteLeitura(id: string): Promise<void> {
 export { generateId }
 
 // ─── App config (users/app-config.yaml in data repo) ─────────────────────
-
-import type { AppRepoConfig } from '@/lib/appConfig'
 
 export async function saveAppConfig(config: AppRepoConfig): Promise<void> {
   if (isDemoMode()) return
