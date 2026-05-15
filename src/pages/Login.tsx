@@ -6,6 +6,7 @@ import { useTheme } from '@/contexts/ThemeContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { loadStaticConfig, type AppRepoConfig } from '@/lib/appConfig'
 import type { GitHubConfig } from '@/lib/github'
 
 const AppLogo = () => (
@@ -31,6 +32,9 @@ export function Login() {
   const navigate = useNavigate()
   const { isDark, toggle } = useTheme()
 
+  const [appConfig, setAppConfig] = useState<AppRepoConfig | null>(null)
+  const [configLoading, setConfigLoading] = useState(true)
+
   const [email, setEmail] = useState('')
   const [pat, setPat] = useState('')
   const [repo, setRepo] = useState('')
@@ -43,6 +47,15 @@ export function Login() {
     if (session) navigate('/app/visao-geral', { replace: true })
   }, [session, navigate])
 
+  useEffect(() => {
+    loadStaticConfig().then(cfg => {
+      setAppConfig(cfg)
+      setConfigLoading(false)
+    })
+  }, [])
+
+  const simplified = appConfig !== null  // true = show email+PAT only
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
@@ -52,24 +65,35 @@ export function Login() {
       return
     }
 
-    const [owner, repoName] = repo.trim().split('/')
-    if (!owner || !repoName) {
-      setError('Repositório deve estar no formato: proprietário/repositório')
-      return
-    }
-
     if (!pat.trim()) {
       setError('Informe o Personal Access Token do GitHub.')
       return
+    }
+
+    let owner: string, repoName: string, branchName: string
+
+    if (simplified && appConfig) {
+      owner = appConfig.owner
+      repoName = appConfig.repo
+      branchName = appConfig.branch
+    } else {
+      const parts = repo.trim().split('/')
+      if (!parts[0] || !parts[1]) {
+        setError('Repositório deve estar no formato: proprietário/repositório')
+        return
+      }
+      owner = parts[0].trim()
+      repoName = parts[1].trim()
+      branchName = branch.trim() || 'main'
     }
 
     setLoading(true)
 
     const githubConfig: GitHubConfig = {
       token: pat.trim(),
-      owner: owner.trim(),
-      repo: repoName.trim(),
-      branch: branch.trim() || 'main',
+      owner,
+      repo: repoName,
+      branch: branchName,
     }
 
     const result = await signIn(email.trim(), githubConfig)
@@ -104,7 +128,13 @@ export function Login() {
         </div>
 
         <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm p-8">
+          {configLoading ? (
+            <div className="flex justify-center py-8">
+              <div className="w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : (
           <form onSubmit={handleSubmit} className="space-y-5">
+            {/* Email */}
             <div className="space-y-1.5">
               <Label htmlFor="email">Email</Label>
               <div className="relative">
@@ -121,6 +151,7 @@ export function Login() {
               </div>
             </div>
 
+            {/* PAT */}
             <div className="space-y-1.5">
               <Label htmlFor="pat">GitHub Personal Access Token</Label>
               <div className="relative">
@@ -144,34 +175,46 @@ export function Login() {
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="repo">Repositório GitHub</Label>
-              <div className="relative">
-                <Github className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <Input
-                  id="repo"
-                  placeholder="proprietário/repositório"
-                  value={repo}
-                  onChange={e => setRepo(e.target.value)}
-                  className="pl-9"
-                  required
-                />
-              </div>
-            </div>
+            {/* Repo + Branch — only shown when no static config */}
+            {!simplified && (
+              <>
+                <div className="space-y-1.5">
+                  <Label htmlFor="repo">Repositório GitHub</Label>
+                  <div className="relative">
+                    <Github className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <Input
+                      id="repo"
+                      placeholder="proprietário/repositório"
+                      value={repo}
+                      onChange={e => setRepo(e.target.value)}
+                      className="pl-9"
+                      required
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="branch">Branch</Label>
+                  <div className="relative">
+                    <GitBranch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <Input
+                      id="branch"
+                      placeholder="main"
+                      value={branch}
+                      onChange={e => setBranch(e.target.value)}
+                      className="pl-9"
+                    />
+                  </div>
+                </div>
+              </>
+            )}
 
-            <div className="space-y-1.5">
-              <Label htmlFor="branch">Branch</Label>
-              <div className="relative">
-                <GitBranch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <Input
-                  id="branch"
-                  placeholder="main"
-                  value={branch}
-                  onChange={e => setBranch(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
-            </div>
+            {/* Repo hint when simplified */}
+            {simplified && appConfig && (
+              <p className="text-xs text-gray-400 dark:text-gray-500 flex items-center gap-1.5">
+                <Github className="w-3 h-3 flex-shrink-0" />
+                {appConfig.owner}/{appConfig.repo} · {appConfig.branch}
+              </p>
+            )}
 
             {error && (
               <div className="bg-red-50 border border-red-100 rounded-lg px-4 py-3 text-sm text-red-700">
@@ -183,6 +226,7 @@ export function Login() {
               {loading ? 'Verificando conexão…' : 'Entrar'}
             </Button>
           </form>
+          )}
 
           <div className="relative my-5">
             <div className="absolute inset-0 flex items-center">

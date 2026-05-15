@@ -255,3 +255,12 @@ export async function deleteLeitura(id: string): Promise<void> {
 }
 
 export { generateId }
+
+// ─── App config (users/app-config.yaml in data repo) ─────────────────────
+
+import type { AppRepoConfig } from '@/lib/appConfig'
+
+export async function saveAppConfig(config: AppRepoConfig): Promise<void> {
+  if (isDemoMode()) return
+  await writeYaml('users/app-config.yaml', config, 'Update app config')
+}

@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
-import { Save, Eye, EyeOff, Trash2 } from 'lucide-react'
+import { Save, Eye, EyeOff, Trash2, Copy, Check } from 'lucide-react'
 import { getEmailJSConfig, saveEmailJSConfig, clearEmailJSConfig, type EmailJSConfig } from '@/lib/emailjs'
 import { getGitHubConfig, saveGitHubConfig, clearGitHubConfig, testConnection, type GitHubConfig } from '@/lib/github'
+import { saveAppConfig } from '@/lib/storage'
+import { clearStaticConfigCache } from '@/lib/appConfig'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -21,6 +23,13 @@ export function Settings() {
   const [showToken, setShowToken] = useState(false)
   const [testing, setTesting] = useState(false)
 
+  // Repo config (admin only)
+  const [repoOwner, setRepoOwner] = useState('')
+  const [repoName, setRepoName] = useState('')
+  const [repoBranch, setRepoBranch] = useState('main')
+  const [savingRepo, setSavingRepo] = useState(false)
+  const [copiedJson, setCopiedJson] = useState(false)
+
   // EmailJS config
   const [ejServiceId, setEjServiceId] = useState('')
   const [ejTemplateId, setEjTemplateId] = useState('')
@@ -33,6 +42,10 @@ export function Settings() {
       setGhOwner(gh.owner)
       setGhRepo(gh.repo)
       setGhBranch(gh.branch)
+      // Pre-fill repo config section for admins
+      setRepoOwner(gh.owner)
+      setRepoName(gh.repo)
+      setRepoBranch(gh.branch)
     }
     const ej = getEmailJSConfig()
     if (ej) {
@@ -75,6 +88,33 @@ export function Settings() {
     toast({ title: 'Configuração EmailJS removida' })
   }
 
+  async function handleSaveRepoConfig() {
+    if (!repoOwner.trim() || !repoName.trim() || !repoBranch.trim()) {
+      toast({ title: 'Preencha todos os campos', variant: 'destructive' })
+      return
+    }
+    setSavingRepo(true)
+    try {
+      const config = { owner: repoOwner.trim(), repo: repoName.trim(), branch: repoBranch.trim() }
+      await saveAppConfig(config)
+      // Update current session in localStorage with new repo info
+      const gh = getGitHubConfig()
+      if (gh) saveGitHubConfig({ ...gh, owner: config.owner, repo: config.repo, branch: config.branch })
+      clearStaticConfigCache()
+      toast({ title: 'Repositório atualizado', description: 'Salvo em users/app-config.yaml no data repo.' })
+    } catch (err) {
+      toast({ title: 'Erro ao salvar', description: String(err), variant: 'destructive' })
+    }
+    setSavingRepo(false)
+  }
+
+  function handleCopyConfigJson() {
+    const json = JSON.stringify({ owner: repoOwner.trim(), repo: repoName.trim(), branch: repoBranch.trim() }, null, 2)
+    navigator.clipboard.writeText(json)
+    setCopiedJson(true)
+    setTimeout(() => setCopiedJson(false), 2000)
+  }
+
   function handleLogout() {
     signOut()
   }
@@ -107,6 +147,60 @@ export function Settings() {
           </Button>
         </div>
       </section>
+
+      {/* Repo config — admin only */}
+      {session?.isAdmin && (
+        <section className="bg-white dark:bg-gray-800 border border-amber-200 dark:border-amber-800 rounded-xl p-5 space-y-4">
+          <div>
+            <h2 className="font-semibold text-gray-800 dark:text-white text-sm">Repositório de dados</h2>
+            <p className="text-xs text-gray-400 mt-0.5">
+              Configure o repositório compartilhado do grupo. Após salvar, os membros precisarão apenas de email e PAT para entrar.
+            </p>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="space-y-1.5">
+              <Label>Owner</Label>
+              <Input value={repoOwner} onChange={e => setRepoOwner(e.target.value)} placeholder="usuario-ou-org" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Repositório</Label>
+              <Input value={repoName} onChange={e => setRepoName(e.target.value)} placeholder="colab-data" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Branch</Label>
+              <Input value={repoBranch} onChange={e => setRepoBranch(e.target.value)} placeholder="main" />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              onClick={handleSaveRepoConfig}
+              disabled={savingRepo || !repoOwner.trim() || !repoName.trim()}
+              className="bg-amber-500 hover:bg-amber-600 text-white"
+            >
+              <Save className="w-4 h-4" />
+              {savingRepo ? 'Salvando…' : 'Salvar'}
+            </Button>
+          </div>
+          {/* Copyable config.json */}
+          <div className="space-y-2 pt-1 border-t border-gray-100 dark:border-gray-700">
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Para simplificar o login de novos membros, cole o conteúdo abaixo no arquivo <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded text-xs">public/config.json</code> do repositório do app e faça um novo deploy.
+            </p>
+            <div className="relative">
+              <pre className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-3 text-xs font-mono text-gray-700 dark:text-gray-300 select-all">
+{JSON.stringify({ owner: repoOwner || 'owner', repo: repoName || 'repo', branch: repoBranch || 'main' }, null, 2)}
+              </pre>
+              <button
+                onClick={handleCopyConfigJson}
+                className="absolute top-2 right-2 p-1.5 rounded bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-400 hover:text-gray-600 transition-colors"
+                title="Copiar"
+              >
+                {copiedJson ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* GitHub */}
       <section className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5 space-y-4">
