@@ -16,6 +16,7 @@ export interface Task {
   order: number
   createdAt: string
   front?: string
+  private?: boolean
 }
 
 export interface UserTasks {

@@ -546,15 +546,10 @@ export function OrdemDoDiaPage() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-900 sticky top-0 z-10">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center flex-shrink-0">
-            <ClipboardList className="w-4 h-4 text-amber-600" />
-          </div>
-          <div>
-            <h1 className="text-lg font-semibold text-gray-900 dark:text-white">Ordem do Dia</h1>
-            {!loading && <p className="text-xs text-gray-400">{activeItems.length} {activeItems.length === 1 ? 'reunião' : 'reuniões'}</p>}
-          </div>
+      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700 sticky top-0 z-10 bg-gray-50 dark:bg-gray-950">
+        <div>
+          <h1 className="text-xl font-bold text-gray-900 dark:text-white">Ordem do Dia</h1>
+          {!loading && <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{activeItems.length} {activeItems.length === 1 ? 'reunião' : 'reuniões'}</p>}
         </div>
         <Button onClick={handleCreate} className="gap-1.5 bg-amber-500 hover:bg-amber-600 text-white" size="sm">
           <Plus className="w-4 h-4" /> Nova Ordem do Dia

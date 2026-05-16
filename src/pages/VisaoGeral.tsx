@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd'
 import {
-  Plus, GripVertical, Check, Trash2, Tag, Code2,
+  Plus, GripVertical, Check, Trash2, Tag, Code2, Lock,
   LayoutDashboard, Layers, CalendarDays, ChevronDown, ChevronUp,
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
@@ -126,7 +126,7 @@ function UserPill({ email, profile }: { email: string; profile: UserProfile | un
 
 function TaskRow({
   task, canEdit, provided, isDragging,
-  onToggle, onChangeTitle, onChangeDate, onChangeFront, onDelete, onBlur, autoFocus,
+  onToggle, onChangeTitle, onChangeDate, onChangeFront, onChangePrivate, onDelete, onBlur, autoFocus,
   allFronts,
 }: {
   task: Task
@@ -137,6 +137,7 @@ function TaskRow({
   onChangeTitle: (v: string) => void
   onChangeDate: (v: string) => void
   onChangeFront: (v: string) => void
+  onChangePrivate: (v: boolean) => void
   onDelete: () => void
   onBlur: () => void
   autoFocus: boolean
@@ -156,7 +157,7 @@ function TaskRow({
   const dateClass = datePillClass(task.dueDate, today)
   const fc = task.front ? frontColor(task.front) : null
   const showGhosts = canEdit && !task.completed
-  const showSubLine = !!task.dueDate || !!task.front || showGhosts
+  const showSubLine = !!task.dueDate || !!task.front || showGhosts || !!task.private
 
   function commitFront() {
     setEditingFront(false)
@@ -285,6 +286,21 @@ function TaskRow({
               + Frente
             </button>
           ) : null}
+
+          {/* Privado pill */}
+          {(showGhosts || task.private) && (
+            <button
+              onClick={() => { if (canEdit) onChangePrivate(!task.private) }}
+              className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full transition-colors ${
+                task.private
+                  ? `bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400 ${canEdit ? 'hover:opacity-80 cursor-pointer' : 'cursor-default'}`
+                  : 'text-gray-300 dark:text-gray-600 hover:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50 opacity-0 group-hover:opacity-100 transition-opacity'
+              }`}
+            >
+              <Lock className="w-2.5 h-2.5" />
+              {task.private ? 'Privado' : '+ Privado'}
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -345,6 +361,11 @@ function UserBlock({
 
   function handleChangeFront(id: string, front: string) {
     const tasks = current.tasks.map(t => t.id === id ? { ...t, front: front || undefined } : t)
+    update({ ...current, tasks })
+  }
+
+  function handleChangePrivate(id: string, isPrivate: boolean) {
+    const tasks = current.tasks.map(t => t.id === id ? { ...t, private: isPrivate || undefined } : t)
     update({ ...current, tasks })
   }
 
@@ -435,6 +456,7 @@ function UserBlock({
                         onChangeTitle={v => handleChangeTitle(task.id, v)}
                         onChangeDate={v => handleChangeDate(task.id, v)}
                         onChangeFront={v => handleChangeFront(task.id, v)}
+                        onChangePrivate={v => handleChangePrivate(task.id, v)}
                         onDelete={() => handleDelete(task.id)}
                         onBlur={handleBlur}
                         autoFocus={task.id === newTaskId}
@@ -472,6 +494,7 @@ function UserBlock({
                 onChangeTitle={v => handleChangeTitle(task.id, v)}
                 onChangeDate={v => handleChangeDate(task.id, v)}
                 onChangeFront={v => handleChangeFront(task.id, v)}
+                onChangePrivate={v => handleChangePrivate(task.id, v)}
                 onDelete={() => handleDelete(task.id)}
                 onBlur={handleBlur}
                 autoFocus={false}
@@ -911,11 +934,17 @@ export function VisaoGeral() {
             <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
               {sortedEmails.map(email => {
                 const ut = userTasksMap.get(email) ?? { email, tasks: [], lastAccess: '' }
-                const canEdit = session?.email === email || session?.isAdmin === true
+                const isOwner = session?.email === email
+                const isAdm = session?.isAdmin === true
+                const canEdit = isOwner || isAdm
+                // Non-owner non-admin users cannot see private tasks of others
+                const visibleTasks = (isOwner || isAdm)
+                  ? ut.tasks
+                  : ut.tasks.filter(t => !t.private)
                 return (
                   <UserBlock
                     key={email}
-                    userTasks={ut}
+                    userTasks={{ ...ut, tasks: visibleTasks }}
                     profile={profileMap.get(email)}
                     canEdit={canEdit}
                     allFronts={allFronts}
@@ -930,7 +959,12 @@ export function VisaoGeral() {
 
         {viewMode === 'front' && (
           <FrontView
-            allTasks={allTasks}
+            allTasks={allTasks.map(ut => ({
+              ...ut,
+              tasks: (session?.email === ut.email || session?.isAdmin)
+                ? ut.tasks
+                : ut.tasks.filter(t => !t.private),
+            }))}
             profileMap={profileMap}
             canCreate={!!session?.email}
             onCreateTask={handleCreateTaskInFront}
@@ -938,7 +972,15 @@ export function VisaoGeral() {
         )}
 
         {viewMode === 'deadline' && (
-          <DeadlineView allTasks={allTasks} profileMap={profileMap} />
+          <DeadlineView
+            allTasks={allTasks.map(ut => ({
+              ...ut,
+              tasks: (session?.email === ut.email || session?.isAdmin)
+                ? ut.tasks
+                : ut.tasks.filter(t => !t.private),
+            }))}
+            profileMap={profileMap}
+          />
         )}
       </div>
 

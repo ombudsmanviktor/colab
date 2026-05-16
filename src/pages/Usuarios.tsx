@@ -265,26 +265,29 @@ function ProfileDialog({ open, onOpenChange, email, profile, isAdmin, isAdminUse
             </div>
           </div>
 
-          {/* Admin-only fields */}
-          {isAdmin && (
-            <div className="space-y-3 p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/30 rounded-lg">
+          {/* Admin section */}
+          <div className="space-y-3 p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/30 rounded-lg">
+            {/* CPF — admin only */}
+            {isAdmin && (
               <div className="space-y-1.5">
                 <Label className="text-xs text-amber-700 dark:text-amber-400">CPF (visível apenas para administradores)</Label>
                 <Input value={cpf} onChange={e => setCpf(e.target.value)} placeholder="000.000.000-00" className="text-xs" />
               </div>
-              {!isSelf && (
-                <label className="flex items-center gap-2 cursor-pointer w-fit">
-                  <input
-                    type="checkbox"
-                    checked={isAdminUser}
-                    onChange={e => onToggleAdmin(e.target.checked)}
-                    className="w-3.5 h-3.5 accent-amber-500 cursor-pointer"
-                  />
-                  <span className="text-xs text-amber-700 dark:text-amber-400">Administrador do grupo</span>
-                </label>
-              )}
-            </div>
-          )}
+            )}
+            {/* Admin checkbox — visible to all; only admins can toggle (and not for self) */}
+            <label className={`flex items-center gap-2 w-fit ${isAdmin && !isSelf ? 'cursor-pointer' : 'cursor-default'}`}>
+              <input
+                type="checkbox"
+                checked={isAdminUser}
+                onChange={e => { if (isAdmin && !isSelf) onToggleAdmin(e.target.checked) }}
+                disabled={!isAdmin || isSelf}
+                className="w-3.5 h-3.5 accent-amber-500"
+              />
+              <span className={`text-xs text-amber-700 dark:text-amber-400 ${!isAdmin || isSelf ? 'opacity-70' : ''}`}>
+                Administrador do grupo
+              </span>
+            </label>
+          </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
