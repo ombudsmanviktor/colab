@@ -95,7 +95,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     saveGitHubConfig(githubConfig)
     if (emailJSConfig) saveEmailJSConfig(emailJSConfig)
 
-    // If the PAT belongs to the repo owner, auto-grant admin on first login
+    // Access control: first login bootstraps the group; subsequent logins
+    // require the email to be pre-registered in users/index.yaml.
+    try {
+      const idx = await loadUsersIndex()
+      if (idx.emails.length === 0) {
+        // No users yet — this is the founding login; register immediately as admin
+        await ensureOwnerAdmin(email)
+      } else if (!idx.emails.map(e => e.toLowerCase()).includes(email.trim().toLowerCase())) {
+        clearGitHubConfig()
+        clearEmailJSConfig()
+        return {
+          ok: false,
+          error: 'Este e-mail não está cadastrado no grupo. Solicite ao administrador que adicione seu acesso em Usuários.',
+        }
+      }
+    } catch { /* If index is unreadable, allow login to avoid lockout */ }
+
+    // If the PAT belongs to the repo owner, also ensure admin rights
     try {
       const ghUser = await getAuthenticatedUser(githubConfig)
       if (ghUser.login.toLowerCase() === githubConfig.owner.toLowerCase()) {

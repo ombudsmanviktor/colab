@@ -477,10 +477,12 @@ export function Usuarios() {
     }))
     try {
       await addUser(email)
-      queryClient.invalidateQueries({ queryKey: ['users-index'] })
+      // Do NOT invalidate on success — the optimistic cache is already correct
+      // and a refetch can return stale data due to GitHub's propagation delay.
+      // The cache will sync naturally on the next navigation/focus refetch.
       toast({ title: 'Usuário adicionado' })
     } catch (err) {
-      // Rollback on failure
+      // Rollback: invalidate so the UI reverts to the real server state
       queryClient.invalidateQueries({ queryKey: ['users-index'] })
       toast({ title: 'Erro', description: String(err), variant: 'destructive' })
     }
