@@ -3,11 +3,12 @@ import {
   saveGitHubConfig,
   clearGitHubConfig,
   testConnection,
+  getAuthenticatedUser,
   type GitHubConfig,
 } from '@/lib/github'
 import { saveEmailJSConfig, clearEmailJSConfig, type EmailJSConfig } from '@/lib/emailjs'
 import { setDemoMode, DEMO_EMAIL } from '@/lib/demoStore'
-import { loadUsersIndex } from '@/lib/storage'
+import { loadUsersIndex, ensureOwnerAdmin } from '@/lib/storage'
 
 const SESSION_KEY = 'colab_session'
 const DEMO_KEY = 'colab_demo'
@@ -77,6 +78,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     saveGitHubConfig(githubConfig)
     if (emailJSConfig) saveEmailJSConfig(emailJSConfig)
+
+    // If the PAT belongs to the repo owner, auto-grant admin on first login
+    try {
+      const ghUser = await getAuthenticatedUser(githubConfig)
+      if (ghUser.login.toLowerCase() === githubConfig.owner.toLowerCase()) {
+        await ensureOwnerAdmin(email)
+      }
+    } catch { /* ignore — don't block login */ }
 
     const isAdmin = await resolveAdminStatus(email)
     const s: AuthSession = { email, githubConfig, emailJSConfig, isAdmin }

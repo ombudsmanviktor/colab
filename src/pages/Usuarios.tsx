@@ -548,7 +548,7 @@ export function Usuarios() {
               profile={profileMap.get(email)}
               isAdmin={isAdmin}
               isAdminUser={admins.includes(email)}
-              canEdit={true}
+              canEdit={isAdmin || email === myEmail}
               isSelf={email === myEmail}
               onEdit={() => openEdit(email)}
               onRemove={() => handleRemoveUser(email)}

@@ -136,3 +136,8 @@ export async function testConnection(
     return { ok: false, error: msg }
   }
 }
+
+/** Returns the GitHub login (username) of the authenticated PAT owner. */
+export async function getAuthenticatedUser(cfg: GitHubConfig): Promise<{ login: string }> {
+  return ghFetch<{ login: string }>(cfg, '/user')
+}

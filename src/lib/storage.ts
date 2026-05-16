@@ -117,6 +117,22 @@ export async function addUser(email: string): Promise<void> {
   }
 }
 
+/**
+ * Called at login when the authenticated GitHub user's login matches the
+ * repo owner. Ensures that email is registered and has admin rights.
+ * Idempotent — safe to call on every login.
+ */
+export async function ensureOwnerAdmin(email: string): Promise<void> {
+  if (isDemoMode()) return
+  try {
+    const idx = await loadUsersIndex()
+    let changed = false
+    if (!idx.emails.includes(email)) { idx.emails.push(email); changed = true }
+    if (!idx.admins.includes(email)) { idx.admins.push(email); changed = true }
+    if (changed) await saveUsersIndex(idx)
+  } catch { /* silent — don't break login */ }
+}
+
 export async function removeUser(email: string): Promise<void> {
   const idx = await loadUsersIndex()
   idx.emails = idx.emails.filter(e => e !== email)
