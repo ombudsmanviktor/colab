@@ -453,14 +453,15 @@ export function Usuarios() {
   }
 
   async function handleToggleAdmin(email: string, checked: boolean) {
-    if (!index) return
-    const updated: UsersIndex = {
-      ...index,
-      admins: checked
-        ? [...index.admins, email]
-        : index.admins.filter(a => a !== email),
-    }
     try {
+      // Fresh read before write so we never overwrite concurrent changes
+      const fresh = await loadUsersIndex()
+      const updated: UsersIndex = {
+        ...fresh,
+        admins: checked
+          ? (fresh.admins.includes(email) ? fresh.admins : [...fresh.admins, email])
+          : fresh.admins.filter(a => a !== email),
+      }
       await saveUsersIndex(updated)
       queryClient.setQueryData(['users-index'], updated)
     } catch (err) {

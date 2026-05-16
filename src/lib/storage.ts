@@ -54,9 +54,21 @@ async function readYaml<T>(path: string): Promise<T | null> {
   }
 }
 
+// ─── Write queue ──────────────────────────────────────────────────────────
+// Serialises concurrent writes to the same path so they never race on SHA.
+const writeQueue = new Map<string, Promise<void>>()
+
 async function writeYaml<T>(path: string, data: T, message: string): Promise<void> {
+  const prev = writeQueue.get(path) ?? Promise.resolve()
+  const next = prev.then(() => _doWrite(path, data, message))
+  // Store without error so the queue keeps draining even if this write fails
+  writeQueue.set(path, next.catch(() => {}))
+  return next
+}
+
+async function _doWrite<T>(path: string, data: T, message: string): Promise<void> {
   const text = yaml.dump(data, { lineWidth: -1 })
-  const MAX = 4
+  const MAX = 5
   for (let attempt = 0; attempt < MAX; attempt++) {
     try {
       const sha = shaCache.get(path)
@@ -65,17 +77,15 @@ async function writeYaml<T>(path: string, data: T, message: string): Promise<voi
       return
     } catch (err: unknown) {
       if (attempt < MAX - 1) {
-        // Any write failure: fetch the current file SHA and retry.
-        // This handles "sha doesn't match", "sha wasn't supplied",
-        // "Invalid request", 409 conflicts, and stale cache misses.
+        // Re-fetch current SHA before retrying (handles all conflict variants)
         try {
           const current = await readFile(cfg(), path)
           shaCache.set(path, current.sha)
         } catch {
-          // File doesn't exist yet (404) — clear cached SHA so next attempt creates it
-          shaCache.delete(path)
+          shaCache.delete(path) // File doesn't exist — next attempt will create it
         }
-        if (attempt > 0) await new Promise(r => setTimeout(r, 200 * attempt))
+        // Always sleep, increasing delay: 100ms, 200ms, 300ms, 400ms
+        await new Promise(r => setTimeout(r, 100 * (attempt + 1)))
       } else {
         throw err
       }

@@ -8,7 +8,7 @@ import {
 } from '@/lib/github'
 import { saveEmailJSConfig, clearEmailJSConfig, type EmailJSConfig } from '@/lib/emailjs'
 import { setDemoMode, DEMO_EMAIL } from '@/lib/demoStore'
-import { loadUsersIndex, ensureOwnerAdmin } from '@/lib/storage'
+import { loadUsersIndex, saveUsersIndex, ensureOwnerAdmin } from '@/lib/storage'
 
 const SESSION_KEY = 'colab_session'
 const DEMO_KEY = 'colab_demo'
@@ -95,32 +95,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     saveGitHubConfig(githubConfig)
     if (emailJSConfig) saveEmailJSConfig(emailJSConfig)
 
-    // Access control: first login bootstraps the group; subsequent logins
-    // require the email to be pre-registered in users/index.yaml.
+    // Detect repo owner in parallel (doesn't need the index)
+    let isRepoOwner = false
+    try {
+      const ghUser = await getAuthenticatedUser(githubConfig)
+      isRepoOwner = ghUser.login.toLowerCase() === githubConfig.owner.toLowerCase()
+    } catch { /* non-fatal */ }
+
+    // ONE read of the index, at most ONE write — avoids SHA race conditions
+    let isAdmin = false
     try {
       const idx = await loadUsersIndex()
-      if (idx.emails.length === 0) {
-        // No users yet — this is the founding login; register immediately as admin
-        await ensureOwnerAdmin(email)
-      } else if (!idx.emails.map(e => e.toLowerCase()).includes(email.trim().toLowerCase())) {
+      const norm = (s: string) => s.trim().toLowerCase()
+      const registered = idx.emails.some(e => norm(e) === norm(email))
+
+      if (idx.emails.length === 0 || isRepoOwner) {
+        // First user (bootstrap) or repo owner → ensure registered + admin
+        let changed = false
+        if (!registered) { idx.emails.push(email); changed = true }
+        if (!idx.admins.some(a => norm(a) === norm(email))) { idx.admins.push(email); changed = true }
+        if (changed) await saveUsersIndex(idx)
+        isAdmin = true
+      } else if (!registered) {
+        // Not registered and not the repo owner → deny access
         clearGitHubConfig()
         clearEmailJSConfig()
         return {
           ok: false,
           error: 'Este e-mail não está cadastrado no grupo. Solicite ao administrador que adicione seu acesso em Usuários.',
         }
+      } else {
+        isAdmin = idx.admins.some(a => norm(a) === norm(email))
       }
-    } catch { /* If index is unreadable, allow login to avoid lockout */ }
+    } catch { /* allow login if index is temporarily unreadable */ }
 
-    // If the PAT belongs to the repo owner, also ensure admin rights
-    try {
-      const ghUser = await getAuthenticatedUser(githubConfig)
-      if (ghUser.login.toLowerCase() === githubConfig.owner.toLowerCase()) {
-        await ensureOwnerAdmin(email)
-      }
-    } catch { /* ignore — don't block login */ }
-
-    const isAdmin = await resolveAdminStatus(email)
     const s: AuthSession = { email, githubConfig, emailJSConfig, isAdmin }
     localStorage.setItem(SESSION_KEY, JSON.stringify(s))
     setSession(s)
