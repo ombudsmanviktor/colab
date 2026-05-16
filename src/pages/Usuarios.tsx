@@ -275,15 +275,15 @@ function ProfileDialog({ open, onOpenChange, email, profile, isAdmin, isAdminUse
               </div>
             )}
             {/* Admin checkbox — visible to all; only admins can toggle (and not for self) */}
-            <label className={`flex items-center gap-2 w-fit ${isAdmin && !isSelf ? 'cursor-pointer' : 'cursor-default'}`}>
+            <label className={`flex items-center gap-2 w-fit ${!isSelf ? 'cursor-pointer' : 'cursor-default'}`}>
               <input
                 type="checkbox"
                 checked={isAdminUser}
-                onChange={e => { if (isAdmin && !isSelf) onToggleAdmin(e.target.checked) }}
-                disabled={!isAdmin || isSelf}
+                onChange={e => { if (!isSelf) onToggleAdmin(e.target.checked) }}
+                disabled={isSelf}
                 className="w-3.5 h-3.5 accent-amber-500"
               />
-              <span className={`text-xs text-amber-700 dark:text-amber-400 ${!isAdmin || isSelf ? 'opacity-70' : ''}`}>
+              <span className={`text-xs text-amber-700 dark:text-amber-400 ${isSelf ? 'opacity-70' : ''}`}>
                 Administrador do grupo
               </span>
             </label>
@@ -548,7 +548,7 @@ export function Usuarios() {
               profile={profileMap.get(email)}
               isAdmin={isAdmin}
               isAdminUser={admins.includes(email)}
-              canEdit={isAdmin || email === myEmail}
+              canEdit={true}
               isSelf={email === myEmail}
               onEdit={() => openEdit(email)}
               onRemove={() => handleRemoveUser(email)}
