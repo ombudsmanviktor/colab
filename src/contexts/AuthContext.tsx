@@ -108,16 +108,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const idx = await loadUsersIndex()
       const norm = (s: string) => s.trim().toLowerCase()
       const registered = idx.emails.some(e => norm(e) === norm(email))
+      const hasAdmin = idx.admins.length > 0
 
-      if (idx.emails.length === 0 || isRepoOwner) {
-        // First user (bootstrap) or repo owner → ensure registered + admin
+      if (isRepoOwner) {
+        // Repo owner always gets in and is auto-promoted to admin
         let changed = false
         if (!registered) { idx.emails.push(email); changed = true }
         if (!idx.admins.some(a => norm(a) === norm(email))) { idx.admins.push(email); changed = true }
         if (changed) await saveUsersIndex(idx)
         isAdmin = true
+      } else if (!hasAdmin) {
+        // No admin defined yet → open-access period; anyone may log in.
+        // Access control only kicks in once an admin exists.
+        isAdmin = false
       } else if (!registered) {
-        // Not registered and not the repo owner → deny access
+        // Admin exists but this email is not registered → deny
         clearGitHubConfig()
         clearEmailJSConfig()
         return {

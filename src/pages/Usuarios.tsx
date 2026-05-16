@@ -150,7 +150,7 @@ function ProfileDialog({ open, onOpenChange, email, profile, isAdmin, isAdminUse
         instagram: instagram.trim() || undefined,
         x: x.trim() || undefined,
         telefone: telefone.trim() || undefined,
-        ...(isAdmin ? { cpf: cpf.trim() || undefined } : {}),
+        ...((isAdmin || isSelf) ? { cpf: cpf.trim() || undefined } : {}),
         imagemBase64: imagemBase64 || undefined,
         updatedAt: now,
       }
@@ -262,9 +262,11 @@ function ProfileDialog({ open, onOpenChange, email, profile, isAdmin, isAdminUse
           {/* Admin section */}
           <div className="space-y-3 p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/30 rounded-lg">
             {/* CPF — admin only */}
-            {isAdmin && (
+            {(isAdmin || isSelf) && (
               <div className="space-y-1.5">
-                <Label className="text-xs text-amber-700 dark:text-amber-400">CPF (visível apenas para administradores)</Label>
+                <Label className="text-xs text-amber-700 dark:text-amber-400">
+                  CPF {isSelf && !isAdmin ? '(visível apenas para você)' : '(visível para você e administradores)'}
+                </Label>
                 <Input value={cpf} onChange={e => setCpf(e.target.value)} placeholder="000.000.000-00" className="text-xs" />
               </div>
             )}
@@ -386,8 +388,8 @@ function ProfileCard({
             )}
           </div>
 
-          {/* CPF — only in DOM for admins */}
-          {isAdmin && profile?.cpf && (
+          {/* CPF — only in DOM for the card's own user or admins */}
+          {(isAdmin || isSelf) && profile?.cpf && (
             <div className="text-xs text-gray-400 dark:text-gray-500">
               CPF: <span className="font-mono">{profile.cpf}</span>
             </div>
