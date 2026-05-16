@@ -524,12 +524,10 @@ export function Usuarios() {
           <h1 className="text-xl font-bold text-gray-900 dark:text-white">Usuários</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Membros do grupo de pesquisa</p>
         </div>
-        {isAdmin && (
-          <Button onClick={() => setNewUserOpen(true)} className="bg-amber-500 hover:bg-amber-600 text-white">
-            <Plus className="w-4 h-4" />
-            Novo Usuário
-          </Button>
-        )}
+        <Button onClick={() => setNewUserOpen(true)} className="bg-amber-500 hover:bg-amber-600 text-white">
+          <Plus className="w-4 h-4" />
+          Novo Usuário
+        </Button>
       </div>
 
       {/* Profile cards */}
