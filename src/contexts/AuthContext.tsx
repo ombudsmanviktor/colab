@@ -41,22 +41,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    try {
-      if (localStorage.getItem(DEMO_KEY) === 'true') {
-        setDemoMode(true)
-        setSession({ email: DEMO_EMAIL, githubConfig: DEMO_GITHUB_CONFIG, isDemo: true, isAdmin: true })
-        setLoading(false)
-        return
-      }
-      const raw = localStorage.getItem(SESSION_KEY)
-      if (raw) {
-        const s = JSON.parse(raw) as AuthSession
-        if (s.email && s.githubConfig?.token) {
-          setSession(s)
+    async function init() {
+      try {
+        if (localStorage.getItem(DEMO_KEY) === 'true') {
+          setDemoMode(true)
+          setSession({ email: DEMO_EMAIL, githubConfig: DEMO_GITHUB_CONFIG, isDemo: true, isAdmin: true })
+          setLoading(false)
+          return
         }
-      }
-    } catch { /* ignore */ }
-    setLoading(false)
+        const raw = localStorage.getItem(SESSION_KEY)
+        if (raw) {
+          const s = JSON.parse(raw) as AuthSession
+          if (s.email && s.githubConfig?.token) {
+            // If not yet admin, check if PAT owner matches repo owner → auto-promote
+            if (!s.isAdmin) {
+              try {
+                const ghUser = await getAuthenticatedUser(s.githubConfig)
+                if (ghUser.login.toLowerCase() === s.githubConfig.owner.toLowerCase()) {
+                  await ensureOwnerAdmin(s.email)
+                }
+              } catch { /* silent */ }
+            }
+            // Always refresh admin status from live data on restore
+            const isAdmin = await resolveAdminStatus(s.email)
+            const updated = { ...s, isAdmin }
+            localStorage.setItem(SESSION_KEY, JSON.stringify(updated))
+            setSession(updated)
+          }
+        }
+      } catch { /* ignore */ }
+      setLoading(false)
+    }
+    init()
   }, [])
 
   async function resolveAdminStatus(email: string): Promise<boolean> {
