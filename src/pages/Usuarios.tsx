@@ -47,22 +47,20 @@ function NewUserDialog({ open, onOpenChange, existingEmails, onSave }: {
   open: boolean
   onOpenChange: (v: boolean) => void
   existingEmails: string[]
-  onSave: (nome: string, email: string) => Promise<void>
+  onSave: (email: string) => Promise<void>
 }) {
-  const [nome, setNome] = useState('')
   const [email, setEmail] = useState('')
   const [saving, setSaving] = useState(false)
   const { toast } = useToast()
 
-  function reset() { setNome(''); setEmail('') }
+  function reset() { setEmail('') }
 
   async function handleSave() {
     const trimEmail = email.trim().toLowerCase()
-    const trimNome = nome.trim()
     if (!trimEmail || !trimEmail.includes('@')) { toast({ title: 'Email inválido' }); return }
     if (existingEmails.includes(trimEmail)) { toast({ title: 'Usuário já cadastrado' }); return }
     setSaving(true)
-    await onSave(trimNome, trimEmail)
+    await onSave(trimEmail)
     setSaving(false)
     reset()
     onOpenChange(false)
@@ -76,10 +74,6 @@ function NewUserDialog({ open, onOpenChange, existingEmails, onSave }: {
         </DialogHeader>
         <div className="space-y-4 py-1">
           <div className="space-y-1.5">
-            <Label>Nome completo</Label>
-            <Input value={nome} onChange={e => setNome(e.target.value)} placeholder="Nome do membro" autoFocus />
-          </div>
-          <div className="space-y-1.5">
             <Label>Email</Label>
             <Input
               value={email}
@@ -87,8 +81,10 @@ function NewUserDialog({ open, onOpenChange, existingEmails, onSave }: {
               onKeyDown={e => e.key === 'Enter' && handleSave()}
               placeholder="email@instituicao.edu.br"
               type="email"
+              autoFocus
             />
           </div>
+          <p className="text-xs text-gray-400">O membro poderá preencher seu próprio perfil após o primeiro acesso.</p>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => { reset(); onOpenChange(false) }}>Cancelar</Button>
@@ -483,16 +479,12 @@ export function Usuarios() {
     }
   }
 
-  async function handleNewUser(nome: string, email: string) {
+  async function handleNewUser(email: string) {
     if (emails.includes(email)) { toast({ title: 'Usuário já cadastrado' }); return }
     try {
-      const updated = await addUser(email)
-      queryClient.setQueryData(['users-index'], updated)
-      const now = new Date().toISOString()
-      const profile: UserProfile = { email, nome: nome.trim(), updatedAt: now }
-      await saveUserProfile(profile)
-      queryClient.setQueryData(['all-profiles'], (prev: UserProfile[] = []) => [...prev, profile])
-      toast({ title: 'Usuário adicionado' })
+      await addUser(email)
+      queryClient.invalidateQueries({ queryKey: ['users-index'] })
+      toast({ title: 'Usuário adicionado', description: 'O membro verá o aviso de preenchimento de perfil ao acessar.' })
     } catch (err) {
       toast({ title: 'Erro', description: String(err), variant: 'destructive' })
     }
@@ -564,6 +556,7 @@ export function Usuarios() {
         existingEmails={emails}
         onSave={handleNewUser}
       />
+
 
       {/* Edit dialog */}
       {editEmail && (
