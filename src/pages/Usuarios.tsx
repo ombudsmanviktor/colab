@@ -50,20 +50,18 @@ function NewUserDialog({ open, onOpenChange, existingEmails, onSave }: {
   onSave: (email: string) => Promise<void>
 }) {
   const [email, setEmail] = useState('')
-  const [saving, setSaving] = useState(false)
   const { toast } = useToast()
 
   function reset() { setEmail('') }
 
-  async function handleSave() {
+  function handleSave() {
     const trimEmail = email.trim().toLowerCase()
     if (!trimEmail || !trimEmail.includes('@')) { toast({ title: 'Email inválido' }); return }
     if (existingEmails.includes(trimEmail)) { toast({ title: 'Usuário já cadastrado' }); return }
-    setSaving(true)
-    await onSave(trimEmail)
-    setSaving(false)
+    // Close dialog immediately; save runs in background
     reset()
     onOpenChange(false)
+    onSave(trimEmail)
   }
 
   return (
@@ -88,8 +86,8 @@ function NewUserDialog({ open, onOpenChange, existingEmails, onSave }: {
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => { reset(); onOpenChange(false) }}>Cancelar</Button>
-          <Button onClick={handleSave} disabled={saving || !email.trim()} className="bg-amber-500 hover:bg-amber-600 text-white">
-            {saving ? 'Adicionando…' : 'Adicionar'}
+          <Button onClick={handleSave} disabled={!email.trim()} className="bg-amber-500 hover:bg-amber-600 text-white">
+            Adicionar
           </Button>
         </DialogFooter>
       </DialogContent>
