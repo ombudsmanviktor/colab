@@ -422,7 +422,6 @@ export function Usuarios() {
   const [editEmail, setEditEmail] = useState<string | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
 
-  const isAdmin = session?.isAdmin ?? false
   const myEmail = session?.email ?? ''
 
   const { data: index, isLoading: loadingIndex } = useQuery<UsersIndex>({
@@ -454,6 +453,8 @@ export function Usuarios() {
   })
 
   const admins = index?.admins ?? []
+  // Derive admin status from live query data (not stale session flag)
+  const isAdmin = admins.includes(myEmail)
 
   async function handleRemoveUser(email: string) {
     if (!confirm(`Remover ${email} do grupo?`)) return

@@ -64,11 +64,17 @@ async function writeYaml<T>(path: string, data: T, message: string): Promise<voi
       shaCache.set(path, res.content.sha)
       return
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err)
-      const isConflict = msg.includes('does not match') || msg.includes('409') || msg.includes('conflict')
-      if (isConflict && attempt < MAX - 1) {
-        const current = await readFile(cfg(), path)
-        shaCache.set(path, current.sha)
+      if (attempt < MAX - 1) {
+        // Any write failure: fetch the current file SHA and retry.
+        // This handles "sha doesn't match", "sha wasn't supplied",
+        // "Invalid request", 409 conflicts, and stale cache misses.
+        try {
+          const current = await readFile(cfg(), path)
+          shaCache.set(path, current.sha)
+        } catch {
+          // File doesn't exist yet (404) — clear cached SHA so next attempt creates it
+          shaCache.delete(path)
+        }
         if (attempt > 0) await new Promise(r => setTimeout(r, 200 * attempt))
       } else {
         throw err

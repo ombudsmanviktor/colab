@@ -217,9 +217,25 @@ function TaskRow({
         )}
       </div>
 
-      {/* Sub-line: date pill + front pill */}
+      {/* Sub-line: Privado | Date | Front */}
       {showSubLine && (
         <div className="flex flex-wrap items-center gap-1.5 mt-0.5 pl-[46px]">
+
+          {/* Privado pill — first */}
+          {(showGhosts || task.private) && (
+            <button
+              onClick={() => { if (canEdit) onChangePrivate(!task.private) }}
+              className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full transition-colors ${
+                task.private
+                  ? `bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400 ${canEdit ? 'hover:opacity-80 cursor-pointer' : 'cursor-default'}`
+                  : 'text-gray-300 dark:text-gray-600 hover:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50 opacity-0 group-hover:opacity-100 transition-opacity'
+              }`}
+            >
+              <Lock className="w-2.5 h-2.5" />
+              {task.private ? 'Privado' : '+ Privado'}
+            </button>
+          )}
+
           {/* Date pill */}
           {editingDate ? (
             <input
@@ -287,20 +303,6 @@ function TaskRow({
             </button>
           ) : null}
 
-          {/* Privado pill */}
-          {(showGhosts || task.private) && (
-            <button
-              onClick={() => { if (canEdit) onChangePrivate(!task.private) }}
-              className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full transition-colors ${
-                task.private
-                  ? `bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400 ${canEdit ? 'hover:opacity-80 cursor-pointer' : 'cursor-default'}`
-                  : 'text-gray-300 dark:text-gray-600 hover:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50 opacity-0 group-hover:opacity-100 transition-opacity'
-              }`}
-            >
-              <Lock className="w-2.5 h-2.5" />
-              {task.private ? 'Privado' : '+ Privado'}
-            </button>
-          )}
         </div>
       )}
     </div>
