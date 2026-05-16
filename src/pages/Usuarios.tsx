@@ -309,7 +309,7 @@ function ProfileCard({
   onEdit: () => void
   onRemove: () => void
 }) {
-  const awaiting = !profile?.nome
+  const awaiting = !profile?.nome || !profile?.status
 
   return (
     <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm overflow-hidden group">
@@ -433,20 +433,11 @@ export function Usuarios() {
   const emails = index?.emails ?? []
   const profileMap = new Map(profiles.map(p => [p.email, p]))
 
-  // Sort: lider first, then by status order, then alphabetical
-  const statusOrder: Record<string, number> = {
-    lider: 0, 'pos-doutorando': 1, doutor: 2, doutorando: 3, mestrando: 4, graduando: 5,
-  }
-  const sortedEmails = [...emails].sort((a, b) => {
-    const pa = profileMap.get(a)
-    const pb = profileMap.get(b)
-    const sa = pa?.status ? (statusOrder[pa.status] ?? 9) : 10
-    const sb = pb?.status ? (statusOrder[pb.status] ?? 9) : 10
-    if (sa !== sb) return sa - sb
-    const na = pa?.nome || a
-    const nb = pb?.nome || b
-    return na.localeCompare(nb, 'pt-BR')
-  })
+  // Sort: self first, then by insertion order in emails[] (oldest = first added)
+  const sortedEmails = [
+    ...(emails.includes(myEmail) ? [myEmail] : []),
+    ...emails.filter(e => e !== myEmail),
+  ]
 
   const admins = index?.admins ?? []
   // Derive admin status from live query data (not stale session flag)
@@ -481,11 +472,18 @@ export function Usuarios() {
 
   async function handleNewUser(email: string) {
     if (emails.includes(email)) { toast({ title: 'Usuário já cadastrado' }); return }
+    // Optimistic update: show card immediately
+    queryClient.setQueryData(['users-index'], (prev: UsersIndex | undefined) => ({
+      emails: [...(prev?.emails ?? []), email],
+      admins: prev?.admins ?? [],
+    }))
     try {
       await addUser(email)
       queryClient.invalidateQueries({ queryKey: ['users-index'] })
-      toast({ title: 'Usuário adicionado', description: 'O membro verá o aviso de preenchimento de perfil ao acessar.' })
+      toast({ title: 'Usuário adicionado' })
     } catch (err) {
+      // Rollback on failure
+      queryClient.invalidateQueries({ queryKey: ['users-index'] })
       toast({ title: 'Erro', description: String(err), variant: 'destructive' })
     }
   }
