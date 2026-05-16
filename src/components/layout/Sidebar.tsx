@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
-  LayoutDashboard, ClipboardList, FileText, BookOpen, Users,
+  LayoutDashboard, ClipboardList, FileText, BookOpen, Users, MessageSquare,
   Menu, X, LogOut, Sun, Moon, Settings,
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
@@ -36,6 +36,13 @@ const NAV_ITEMS = [
     icon: BookOpen,
     activeClass: 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300',
     iconClass: 'text-amber-500',
+  },
+  {
+    to: '/app/sugestoes',
+    label: 'Sugestões',
+    icon: MessageSquare,
+    activeClass: 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300',
+    iconClass: 'text-amber-600',
   },
   {
     to: '/app/usuarios',

@@ -10,7 +10,7 @@ import {
   decodeContent,
   type GitHubConfig,
 } from './github'
-import type { UsersIndex, UserTasks, UserProfile, OrdemDoDia, AtaDecisao, Leitura } from '@/types'
+import type { UsersIndex, UserTasks, UserProfile, OrdemDoDia, AtaDecisao, Leitura, SugestaoMessage } from '@/types'
 import type { AppRepoConfig } from '@/lib/appConfig'
 import { emailSlug, generateId } from './utils'
 import {
@@ -21,6 +21,7 @@ import {
   demoLoadOrdens, demoSaveOrdem, demoDeleteOrdem,
   demoLoadAtas, demoSaveAta, demoDeleteAta,
   demoLoadLeituras, demoSaveLeitura, demoDeleteLeitura,
+  demoLoadSugestoes, demoSaveSugestao, demoDeleteSugestao,
 } from './demoStore'
 
 // ─── SHA cache ────────────────────────────────────────────────────────────
@@ -262,6 +263,34 @@ export async function deleteLeitura(id: string): Promise<void> {
 }
 
 export { generateId }
+
+// ─── Sugestões ────────────────────────────────────────────────────────────
+
+export async function loadSugestoes(): Promise<SugestaoMessage[]> {
+  if (isDemoMode()) return demoLoadSugestoes()
+  try {
+    const entries = await listDirectory(cfg(), 'sugestoes')
+    const files = entries.filter(e => e.type === 'file' && e.name.endsWith('.yaml'))
+    const results = await Promise.all(
+      files.map(f => readYaml<SugestaoMessage>(`sugestoes/${f.name}`))
+    )
+    return results
+      .filter((x): x is SugestaoMessage => x !== null)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+  } catch {
+    return []
+  }
+}
+
+export async function saveSugestao(msg: SugestaoMessage): Promise<void> {
+  if (isDemoMode()) { demoSaveSugestao(msg); return }
+  await writeYaml(`sugestoes/${msg.id}.yaml`, msg, `Sugestão ${msg.id}`)
+}
+
+export async function deleteSugestao(id: string): Promise<void> {
+  if (isDemoMode()) { demoDeleteSugestao(id); return }
+  await removeYaml(`sugestoes/${id}.yaml`, `Delete sugestão ${id}`)
+}
 
 // ─── App config (users/app-config.yaml in data repo) ─────────────────────
 

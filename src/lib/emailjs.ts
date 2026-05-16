@@ -102,6 +102,28 @@ export async function notifyTaskEvent(params: {
   ))
 }
 
+// ─── Sugestões mention notification ──────────────────────────────────────
+
+export async function notifySugestaoMention(params: {
+  senderEmail: string
+  recipientEmails: string[]
+  messageExcerpt: string
+}): Promise<void> {
+  if (!getEmailJSConfig()) return
+  await Promise.allSettled(
+    params.recipientEmails.map(to =>
+      sendEmail({
+        toEmail: to,
+        fromEmail: params.senderEmail,
+        moduleName: 'Sugestões',
+        excerpt: params.messageExcerpt.slice(0, 300),
+        meetingDate: '',
+        notificationType: 'mention',
+      })
+    )
+  )
+}
+
 // ─── Leitura notification ─────────────────────────────────────────────────
 
 export async function sendLeituraNotification(params: {

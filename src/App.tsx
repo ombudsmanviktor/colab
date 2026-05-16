@@ -10,6 +10,7 @@ import { VisaoGeralEmbed } from '@/pages/VisaoGeralEmbed'
 import { OrdemDoDiaPage as OrdemDoDia } from '@/pages/OrdemDoDia'
 import { AtasEDecisoes } from '@/pages/AtasEDecisoes'
 import { Leituras } from '@/pages/Leituras'
+import { Sugestoes } from '@/pages/Sugestoes'
 import { Usuarios } from '@/pages/Usuarios'
 import { Settings } from '@/pages/Settings'
 
@@ -44,6 +45,7 @@ export default function App() {
                 <Route path="ordem-do-dia" element={<OrdemDoDia />} />
                 <Route path="atas-e-decisoes" element={<AtasEDecisoes />} />
                 <Route path="leituras" element={<Leituras />} />
+                <Route path="sugestoes" element={<Sugestoes />} />
                 <Route path="usuarios" element={<Usuarios />} />
                 <Route path="settings" element={<Settings />} />
               </Route>

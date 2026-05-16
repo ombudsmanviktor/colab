@@ -88,6 +88,26 @@ export interface AtaDecisao {
   updatedAt: string
 }
 
+// ─── Sugestões ────────────────────────────────────────────────────────────
+
+export interface SugestaoAttachment {
+  name: string
+  base64: string
+  mimeType: string
+  size: number // bytes
+}
+
+export interface SugestaoMessage {
+  id: string
+  authorEmail: string
+  content: string
+  createdAt: string
+  private?: boolean
+  privateRecipient?: string // email — if set, message is private between author and this recipient
+  attachments?: SugestaoAttachment[]
+  mentions?: string[] // emails mentioned in the message
+}
+
 // ─── Leituras Recomendadas ────────────────────────────────────────────────
 
 export interface Leitura {
