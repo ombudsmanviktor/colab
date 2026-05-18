@@ -445,11 +445,19 @@ export function Usuarios() {
 
   async function handleRemoveUser(email: string) {
     if (!confirm(`Remover ${email} do grupo?`)) return
+    // Optimistic update: remove card immediately
+    queryClient.setQueryData(['users-index'], (prev: UsersIndex | undefined) => prev
+      ? { emails: prev.emails.filter(e => e !== email), admins: prev.admins.filter(a => a !== email) }
+      : prev
+    )
     try {
       await removeUser(email)
-      queryClient.invalidateQueries({ queryKey: ['users-index'] })
+      // Do NOT invalidate on success — same reason as handleNewUser:
+      // an immediate refetch may return stale data and restore the removed card.
       toast({ title: 'Usuário removido' })
     } catch (err) {
+      // Rollback on failure
+      queryClient.invalidateQueries({ queryKey: ['users-index'] })
       toast({ title: 'Erro', description: String(err), variant: 'destructive' })
     }
   }
