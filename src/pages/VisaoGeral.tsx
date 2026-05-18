@@ -846,7 +846,12 @@ export function VisaoGeral() {
   }
 
   const userTasksMap = new Map(allTasks.map(ut => [ut.email, ut]))
-  const allEmails = [...new Set([...emails, ...allTasks.map(ut => ut.email)])]
+  // Only show users registered in the index; task files from removed users
+  // are cleaned up by removeUser() but this guard prevents orphaned files
+  // from appearing even if cleanup was incomplete.
+  const allEmails = emails.length > 0
+    ? emails
+    : [...new Set(allTasks.map(ut => ut.email))] // fallback before index loads
   const sortedEmails = [...allEmails].sort((a, b) => {
     if (a === session?.email) return -1
     if (b === session?.email) return 1

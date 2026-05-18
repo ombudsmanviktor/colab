@@ -77,10 +77,14 @@ export async function listDirectory(cfg: GitHubConfig, dirPath: string): Promise
   }
 }
 
-export async function readFile(cfg: GitHubConfig, filePath: string): Promise<GHFileContent> {
+export async function readFile(cfg: GitHubConfig, filePath: string, bypassCache = false): Promise<GHFileContent> {
+  // bypassCache appends a timestamp so GitHub's CDN treats it as a unique
+  // URL and always fetches from origin — critical before a write to get
+  // the current SHA rather than a cached (stale) one.
+  const cb = bypassCache ? `&_ts=${Date.now()}` : ''
   return ghFetch<GHFileContent>(
     cfg,
-    `/repos/${cfg.owner}/${cfg.repo}/contents/${filePath}?ref=${cfg.branch}`
+    `/repos/${cfg.owner}/${cfg.repo}/contents/${filePath}?ref=${cfg.branch}${cb}`
   )
 }
 

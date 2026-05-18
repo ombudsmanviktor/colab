@@ -450,14 +450,17 @@ export function Usuarios() {
       ? { emails: prev.emails.filter(e => e !== email), admins: prev.admins.filter(a => a !== email) }
       : prev
     )
+    // Also remove from profiles cache immediately
+    queryClient.setQueryData(['all-profiles'], (prev: UserProfile[] | undefined) =>
+      prev ? prev.filter(p => p.email !== email) : prev
+    )
     try {
-      await removeUser(email)
-      // Do NOT invalidate on success — same reason as handleNewUser:
-      // an immediate refetch may return stale data and restore the removed card.
+      await removeUser(email) // also deletes tasks + profile files on GitHub
       toast({ title: 'Usuário removido' })
     } catch (err) {
       // Rollback on failure
       queryClient.invalidateQueries({ queryKey: ['users-index'] })
+      queryClient.invalidateQueries({ queryKey: ['all-profiles'] })
       toast({ title: 'Erro', description: String(err), variant: 'destructive' })
     }
   }

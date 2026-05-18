@@ -71,10 +71,10 @@ async function _doWrite<T>(path: string, data: T, message: string): Promise<void
   const MAX = 5
   for (let attempt = 0; attempt < MAX; attempt++) {
     // Always fetch the live SHA from GitHub before each attempt.
-    // Relying on the cache risks using a sha that became stale between
-    // when the caller read the data and when this queued write executes.
+    // bypassCache=true forces a cache-miss on GitHub's CDN so we get the
+    // SHA from origin, not a stale edge-cached response.
     try {
-      const current = await readFile(cfg(), path)
+      const current = await readFile(cfg(), path, true)
       shaCache.set(path, current.sha)
     } catch {
       shaCache.delete(path) // File doesn't exist yet — write will create it
@@ -150,6 +150,11 @@ export async function removeUser(email: string): Promise<void> {
   idx.emails = idx.emails.filter(e => e !== email)
   idx.admins = idx.admins.filter(e => e !== email)
   await saveUsersIndex(idx)
+  // Clean up all data files for this user (best-effort; errors are silenced)
+  await Promise.allSettled([
+    removeYaml(`tasks/${emailSlug(email)}.yaml`, `Delete tasks for ${email}`),
+    removeYaml(`users/profiles/${emailSlug(email)}.yaml`, `Delete profile for ${email}`),
+  ])
 }
 
 // ─── User Tasks ───────────────────────────────────────────────────────────
