@@ -476,7 +476,7 @@ export function Sugestoes() {
     >
       {/* Header */}
       <div className="flex-shrink-0 pb-4 border-b border-gray-100 dark:border-gray-800">
-        <h1 className="text-xl font-bold text-gray-900 dark:text-white">Sugestões</h1>
+        <h1 className="text-xl font-bold text-gray-900 dark:text-white">Bate-Papo e Sugestões</h1>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Canal de mensagens e sugestões do grupo</p>
       </div>
 

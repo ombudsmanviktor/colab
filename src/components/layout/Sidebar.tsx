@@ -39,7 +39,7 @@ const NAV_ITEMS = [
   },
   {
     to: '/app/sugestoes',
-    label: 'Sugestões',
+    label: 'Bate-Papo e Sugestões',
     icon: MessageSquare,
     activeClass: 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300',
     iconClass: 'text-amber-600',

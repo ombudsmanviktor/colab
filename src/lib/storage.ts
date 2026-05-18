@@ -70,6 +70,15 @@ async function _doWrite<T>(path: string, data: T, message: string): Promise<void
   const text = yaml.dump(data, { lineWidth: -1 })
   const MAX = 5
   for (let attempt = 0; attempt < MAX; attempt++) {
+    // Always fetch the live SHA from GitHub before each attempt.
+    // Relying on the cache risks using a sha that became stale between
+    // when the caller read the data and when this queued write executes.
+    try {
+      const current = await readFile(cfg(), path)
+      shaCache.set(path, current.sha)
+    } catch {
+      shaCache.delete(path) // File doesn't exist yet — write will create it
+    }
     try {
       const sha = shaCache.get(path)
       const res = await writeTextFile(cfg(), path, text, message, sha)
@@ -77,15 +86,8 @@ async function _doWrite<T>(path: string, data: T, message: string): Promise<void
       return
     } catch (err: unknown) {
       if (attempt < MAX - 1) {
-        // Re-fetch current SHA before retrying (handles all conflict variants)
-        try {
-          const current = await readFile(cfg(), path)
-          shaCache.set(path, current.sha)
-        } catch {
-          shaCache.delete(path) // File doesn't exist — next attempt will create it
-        }
-        // Always sleep, increasing delay: 100ms, 200ms, 300ms, 400ms
-        await new Promise(r => setTimeout(r, 100 * (attempt + 1)))
+        // Brief back-off before next attempt
+        await new Promise(r => setTimeout(r, 150 * (attempt + 1)))
       } else {
         throw err
       }
