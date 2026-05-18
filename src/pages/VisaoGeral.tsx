@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd'
 import {
   Plus, GripVertical, Check, Trash2, Tag, Code2, Lock,
@@ -12,7 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useToast } from '@/hooks/useToast'
 import { ToastContainer } from '@/components/ui/toast'
-import type { Task, UserTasks, UserProfile } from '@/types'
+import type { Task, UserTasks, UserProfile, UsersIndex } from '@/types'
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
@@ -780,11 +781,19 @@ function DeadlineView({ allTasks, profileMap }: { allTasks: UserTasks[]; profile
 export function VisaoGeral() {
   const { session } = useAuth()
   const { toasts, toast, dismiss } = useToast()
+  const queryClient = useQueryClient()
   const [allTasks, setAllTasks] = useState<UserTasks[]>([])
   const [profiles, setProfiles] = useState<UserProfile[]>([])
-  const [emails, setEmails] = useState<string[]>([])
-  const [adminEmails, setAdminEmails] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
+
+  // Shared with Usuarios via TanStack Query cache — updates reactively when
+  // a user is added or removed without requiring a page reload.
+  const { data: usersIndex } = useQuery<UsersIndex>({
+    queryKey: ['users-index'],
+    queryFn: loadUsersIndex,
+  })
+  const emails = usersIndex?.emails ?? []
+  const adminEmails = usersIndex?.admins ?? []
   const [embedOpen, setEmbedOpen] = useState(false)
   const [viewMode, setViewMode] = useState<ViewMode>('user')
   const savingRef = useRef<Map<string, Promise<void>>>(new Map())
@@ -797,8 +806,9 @@ export function VisaoGeral() {
           loadAllUserTasks(),
           loadAllProfiles(),
         ])
-        setEmails(idx.emails)
-        setAdminEmails(idx.admins ?? [])
+        // Populate the shared TanStack Query cache so Usuarios and VisaoGeral
+        // stay in sync from the very first load.
+        queryClient.setQueryData(['users-index'], idx)
         setAllTasks(tasks)
         setProfiles(profs)
         if (session?.email) {
