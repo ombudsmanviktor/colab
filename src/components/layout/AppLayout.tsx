@@ -1,10 +1,24 @@
+import { useState } from 'react'
 import { Outlet } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { Sidebar } from './Sidebar'
 import { FlaskConical } from 'lucide-react'
 
+const SIDEBAR_KEY = 'colab_sidebar_collapsed'
+
 export function AppLayout() {
   const { isDemoMode } = useAuth()
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+    try { return localStorage.getItem(SIDEBAR_KEY) === 'true' } catch { return false }
+  })
+
+  function toggleSidebar() {
+    setSidebarCollapsed(v => {
+      const next = !v
+      try { localStorage.setItem(SIDEBAR_KEY, String(next)) } catch { /* ignore */ }
+      return next
+    })
+  }
 
   return (
     <div className="flex min-h-screen bg-gray-50 dark:bg-gray-950 flex-col">
@@ -15,7 +29,7 @@ export function AppLayout() {
         </div>
       )}
       <div className="flex flex-1 min-h-0">
-        <Sidebar />
+        <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
         <main className="flex-1 min-w-0 overflow-auto pt-14 lg:pt-0">
           <div className="p-6 lg:p-8 max-w-7xl mx-auto">
             <Outlet />

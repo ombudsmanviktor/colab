@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, ClipboardList, FileText, BookOpen, Users, MessageSquare,
-  Menu, X, LogOut, Sun, Moon, Settings,
+  Menu, X, LogOut, Sun, Moon, Settings, PanelLeftClose, PanelLeftOpen,
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useTheme } from '@/contexts/ThemeContext'
@@ -87,41 +87,35 @@ function ThemeToggle({ small = false }: { small?: boolean }) {
   )
 }
 
-export function Sidebar() {
+interface SidebarProps {
+  collapsed?: boolean
+  onToggle?: () => void
+}
+
+export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
   const { session, signOut } = useAuth()
   const navigate = useNavigate()
   const [mobileOpen, setMobileOpen] = useState(false)
 
-  const sidebarContent = (
+  // Shared content for mobile drawer (always expanded)
+  const mobileContent = (
     <div className="flex flex-col h-full">
-      {/* Header */}
       <div className="p-4 border-b border-gray-100 dark:border-gray-700">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 flex-shrink-0">
-            <AppLogo gid="cl-side" />
-          </div>
+          <div className="w-8 h-8 flex-shrink-0"><AppLogo gid="cl-mob-drawer" /></div>
           <div className="min-w-0">
             <p className="font-bold text-gray-900 dark:text-white text-sm">coLAB</p>
             <p className="text-xs text-gray-400 dark:text-gray-500">Gestão de grupo de pesquisa</p>
           </div>
         </div>
       </div>
-
-      {/* Nav */}
       <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
         {NAV_ITEMS.map(({ to, label, icon: Icon, activeClass, iconClass }) => (
-          <NavLink
-            key={to}
-            to={to}
-            onClick={() => setMobileOpen(false)}
-            className={({ isActive }) =>
-              cn(
-                'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
-                isActive
-                  ? activeClass
-                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
-              )
-            }
+          <NavLink key={to} to={to} onClick={() => setMobileOpen(false)}
+            className={({ isActive }) => cn(
+              'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
+              isActive ? activeClass : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+            )}
           >
             {({ isActive }) => (
               <>
@@ -132,23 +126,16 @@ export function Sidebar() {
           </NavLink>
         ))}
       </nav>
-
-      {/* Footer */}
       <div className="p-3 border-t border-gray-100 dark:border-gray-700 space-y-1">
-        <NavLink
-          to="/app/settings"
-          onClick={() => setMobileOpen(false)}
-          className={({ isActive }) =>
-            cn(
-              'flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors',
-              isActive && 'bg-gray-100 dark:bg-gray-800'
-            )
-          }
+        <NavLink to="/app/settings" onClick={() => setMobileOpen(false)}
+          className={({ isActive }) => cn(
+            'flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors',
+            isActive && 'bg-gray-100 dark:bg-gray-800'
+          )}
         >
           <Settings className="w-4 h-4 text-gray-400 flex-shrink-0" />
           Configurações
         </NavLink>
-
         <div className="flex items-center gap-2 px-3 py-2">
           <div className="w-6 h-6 rounded-full bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center flex-shrink-0">
             <span className="text-xs font-semibold text-amber-700 dark:text-amber-300">
@@ -158,9 +145,7 @@ export function Sidebar() {
           <span className="text-xs text-gray-500 dark:text-gray-400 truncate flex-1">{session?.email}</span>
           <div className="flex items-center gap-1 flex-shrink-0">
             <ThemeToggle small />
-            <button
-              onClick={() => { signOut(); navigate('/login') }}
-              title="Sair"
+            <button onClick={() => { signOut(); navigate('/login') }} title="Sair"
               className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
             >
               <LogOut className="w-3.5 h-3.5" />
@@ -194,12 +179,132 @@ export function Sidebar() {
         'lg:hidden fixed top-14 left-0 bottom-0 w-64 z-40 bg-white dark:bg-gray-900 border-r border-gray-100 dark:border-gray-700 transition-transform duration-200',
         mobileOpen ? 'translate-x-0' : '-translate-x-full'
       )}>
-        {sidebarContent}
+        {mobileContent}
       </div>
 
       {/* Desktop sidebar */}
-      <aside className="hidden lg:flex flex-col w-60 bg-white dark:bg-gray-900 border-r border-gray-100 dark:border-gray-700 flex-shrink-0 sticky top-0 h-screen">
-        {sidebarContent}
+      <aside className={cn(
+        'hidden lg:flex flex-col bg-white dark:bg-gray-900 border-r border-gray-100 dark:border-gray-700 flex-shrink-0 sticky top-0 h-screen transition-all duration-300 overflow-hidden',
+        collapsed ? 'w-14' : 'w-60'
+      )}>
+        <div className="flex flex-col h-full">
+          {/* Header */}
+          <div className={cn(
+            'border-b border-gray-100 dark:border-gray-700 flex-shrink-0',
+            collapsed ? 'p-2 flex flex-col items-center gap-2' : 'p-4'
+          )}>
+            {collapsed ? (
+              <>
+                <div className="w-8 h-8"><AppLogo gid="cl-side-c" /></div>
+                <button
+                  onClick={onToggle}
+                  title="Expandir menu"
+                  className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                >
+                  <PanelLeftOpen className="w-4 h-4" />
+                </button>
+              </>
+            ) : (
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 flex-shrink-0"><AppLogo gid="cl-side" /></div>
+                <div className="min-w-0 flex-1">
+                  <p className="font-bold text-gray-900 dark:text-white text-sm">coLAB</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500">Gestão de grupo de pesquisa</p>
+                </div>
+                <button
+                  onClick={onToggle}
+                  title="Ocultar menu"
+                  className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors flex-shrink-0"
+                >
+                  <PanelLeftClose className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Nav */}
+          <nav className={cn('flex-1 overflow-y-auto space-y-0.5', collapsed ? 'p-2' : 'p-3')}>
+            {NAV_ITEMS.map(({ to, label, icon: Icon, activeClass, iconClass }) => (
+              <NavLink
+                key={to}
+                to={to}
+                title={collapsed ? label : undefined}
+                className={({ isActive }) => cn(
+                  'flex items-center rounded-lg text-sm font-medium transition-colors',
+                  collapsed ? 'justify-center p-2.5' : 'gap-3 px-3 py-2.5',
+                  isActive
+                    ? activeClass
+                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                )}
+              >
+                {({ isActive }) => (
+                  <>
+                    <Icon className={cn('w-4 h-4 flex-shrink-0', isActive ? iconClass : 'text-gray-400 dark:text-gray-500')} />
+                    {!collapsed && <span className="truncate">{label}</span>}
+                  </>
+                )}
+              </NavLink>
+            ))}
+          </nav>
+
+          {/* Footer */}
+          <div className={cn(
+            'border-t border-gray-100 dark:border-gray-700 space-y-1 flex-shrink-0',
+            collapsed ? 'p-2' : 'p-3'
+          )}>
+            {collapsed ? (
+              <div className="flex flex-col items-center gap-1">
+                <NavLink to="/app/settings" title="Configurações"
+                  className={({ isActive }) => cn(
+                    'p-2.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors',
+                    isActive && 'bg-gray-100 dark:bg-gray-800'
+                  )}
+                >
+                  <Settings className="w-4 h-4" />
+                </NavLink>
+                <div className="w-6 h-6 rounded-full bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center" title={session?.email}>
+                  <span className="text-xs font-semibold text-amber-700 dark:text-amber-300">
+                    {session?.email?.[0]?.toUpperCase() ?? '?'}
+                  </span>
+                </div>
+                <ThemeToggle small />
+                <button onClick={() => { signOut(); navigate('/login') }} title="Sair"
+                  className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <>
+                <NavLink to="/app/settings"
+                  className={({ isActive }) => cn(
+                    'flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors',
+                    isActive && 'bg-gray-100 dark:bg-gray-800'
+                  )}
+                >
+                  <Settings className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                  Configurações
+                </NavLink>
+                <div className="flex items-center gap-2 px-3 py-2">
+                  <div className="w-6 h-6 rounded-full bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center flex-shrink-0">
+                    <span className="text-xs font-semibold text-amber-700 dark:text-amber-300">
+                      {session?.email?.[0]?.toUpperCase() ?? '?'}
+                    </span>
+                  </div>
+                  <span className="text-xs text-gray-500 dark:text-gray-400 truncate flex-1">{session?.email}</span>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <ThemeToggle small />
+                    <button onClick={() => { signOut(); navigate('/login') }} title="Sair"
+                      className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
       </aside>
     </>
   )
