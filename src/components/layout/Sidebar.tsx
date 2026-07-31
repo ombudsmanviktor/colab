@@ -55,8 +55,8 @@ const NAV_ITEMS = [
     to: '/app/linha-do-tempo',
     label: 'Linha do Tempo',
     icon: Clock,
-    activeClass: 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300',
-    iconClass: 'text-indigo-600',
+    activeClass: 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300',
+    iconClass: 'text-amber-600',
   },
   {
     to: '/app/usuarios',

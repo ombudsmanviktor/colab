@@ -85,7 +85,7 @@ function EventCard({
   onDelete: () => void
 }) {
   const cats = event.category_ids.map(id => categories.find(c => c.id === id)).filter(Boolean) as TimelineCategory[]
-  const dotColor = cats[0] ? (PALETTE[cats[0].color]?.dot ?? '#6366f1') : '#6366f1'
+  const dotColor = cats[0] ? (PALETTE[cats[0].color]?.dot ?? '#f59e0b') : '#f59e0b'
 
   return (
     <div className={cn(
@@ -134,7 +134,7 @@ function EventCard({
       <div className="absolute top-2 right-2 hidden group-hover:flex gap-1">
         <button
           onClick={onEdit}
-          className="p-1 rounded-lg bg-white dark:bg-gray-700 border border-gray-100 dark:border-gray-600 text-gray-400 hover:text-indigo-600 hover:border-indigo-200 dark:hover:text-indigo-400 transition-colors shadow-sm"
+          className="p-1 rounded-lg bg-white dark:bg-gray-700 border border-gray-100 dark:border-gray-600 text-gray-400 hover:text-amber-600 hover:border-amber-200 dark:hover:text-amber-400 transition-colors shadow-sm"
         >
           <Pencil className="w-3 h-3" />
         </button>
@@ -160,16 +160,16 @@ function CategoryManagerDialog({
 }) {
   const [cats, setCats] = useState<TimelineCategory[]>(JSON.parse(JSON.stringify(categories)))
   const [newName, setNewName] = useState('')
-  const [newColor, setNewColor] = useState('indigo')
+  const [newColor, setNewColor] = useState('amber')
   const [editId, setEditId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
-  const [editColor, setEditColor] = useState('indigo')
+  const [editColor, setEditColor] = useState('amber')
 
   function addCat() {
     if (!newName.trim()) return
     setCats(prev => [...prev, { id: generateId(), name: newName.trim(), color: newColor }])
     setNewName('')
-    setNewColor('indigo')
+    setNewColor('amber')
   }
 
   function startEdit(c: TimelineCategory) {
@@ -193,7 +193,7 @@ function CategoryManagerDialog({
       <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col">
         <div className="flex items-center justify-between p-5 border-b border-gray-100 dark:border-gray-700">
           <div className="flex items-center gap-2">
-            <Tag className="w-4 h-4 text-indigo-600" />
+            <Tag className="w-4 h-4 text-amber-600" />
             <h2 className="font-semibold text-gray-900 dark:text-white">Categorias</h2>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800">
@@ -210,11 +210,11 @@ function CategoryManagerDialog({
                     value={editName}
                     onChange={e => setEditName(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && commitEdit()}
-                    className="flex-1 text-sm border border-indigo-300 dark:border-indigo-600 rounded-lg px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none"
+                    className="flex-1 text-sm border border-amber-300 dark:border-amber-600 rounded-lg px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none"
                     autoFocus
                   />
                   <ColorPicker value={editColor} onChange={setEditColor} />
-                  <button onClick={commitEdit} className="p-1.5 rounded-lg text-white bg-indigo-600 hover:bg-indigo-700">
+                  <button onClick={commitEdit} className="p-1.5 rounded-lg text-white bg-amber-500 hover:bg-amber-600">
                     <Check className="w-3.5 h-3.5" />
                   </button>
                 </>
@@ -222,7 +222,7 @@ function CategoryManagerDialog({
                 <>
                   <CategoryPill cat={cat} />
                   <span className="flex-1 text-sm text-gray-700 dark:text-gray-300">{cat.name}</span>
-                  <button onClick={() => startEdit(cat)} className="p-1.5 rounded text-gray-400 hover:text-indigo-600">
+                  <button onClick={() => startEdit(cat)} className="p-1.5 rounded text-gray-400 hover:text-amber-600">
                     <Pencil className="w-3.5 h-3.5" />
                   </button>
                   <button onClick={() => deleteCat(cat.id)} className="p-1.5 rounded text-gray-400 hover:text-red-500">
@@ -246,13 +246,13 @@ function CategoryManagerDialog({
               onChange={e => setNewName(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && addCat()}
               placeholder="Nome da categoria"
-              className="flex-1 text-sm border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 dark:focus:ring-indigo-900"
+              className="flex-1 text-sm border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100 dark:focus:ring-amber-900"
             />
             <ColorPicker value={newColor} onChange={setNewColor} />
             <button
               onClick={addCat}
               disabled={!newName.trim()}
-              className="p-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="p-2 rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Plus className="w-4 h-4" />
             </button>
@@ -265,7 +265,7 @@ function CategoryManagerDialog({
           </button>
           <button
             onClick={() => { onSave(cats); onClose() }}
-            className="px-4 py-2 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 font-medium"
+            className="px-4 py-2 text-sm rounded-lg bg-amber-500 text-white hover:bg-amber-600 font-medium"
           >
             Salvar
           </button>
@@ -279,13 +279,13 @@ function CategoryManagerDialog({
 
 function ColorPicker({ value, onChange }: { value: string; onChange: (c: string) => void }) {
   const [open, setOpen] = useState(false)
-  const dot = PALETTE[value]?.dot ?? '#6366f1'
+  const dot = PALETTE[value]?.dot ?? '#f59e0b'
   return (
     <div className="relative">
       <button
         type="button"
         onClick={() => setOpen(v => !v)}
-        className="w-8 h-8 rounded-lg border border-gray-200 dark:border-gray-600 flex items-center justify-center hover:border-indigo-400 transition-colors"
+        className="w-8 h-8 rounded-lg border border-gray-200 dark:border-gray-600 flex items-center justify-center hover:border-amber-400 transition-colors"
       >
         <span className="w-4 h-4 rounded-full" style={{ background: dot }} />
       </button>
@@ -296,7 +296,7 @@ function ColorPicker({ value, onChange }: { value: string; onChange: (c: string)
               key={key}
               title={c.label}
               onClick={() => { onChange(key); setOpen(false) }}
-              className={cn('w-6 h-6 rounded-full transition-transform hover:scale-110', value === key && 'ring-2 ring-offset-1 ring-indigo-500')}
+              className={cn('w-6 h-6 rounded-full transition-transform hover:scale-110', value === key && 'ring-2 ring-offset-1 ring-amber-500')}
               style={{ background: c.dot }}
             />
           ))}
@@ -353,7 +353,7 @@ function EventFormDialog({
       <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-lg">
         <div className="flex items-center justify-between p-5 border-b border-gray-100 dark:border-gray-700">
           <div className="flex items-center gap-2">
-            <Clock className="w-4 h-4 text-indigo-600" />
+            <Clock className="w-4 h-4 text-amber-600" />
             <h2 className="font-semibold text-gray-900 dark:text-white">
               {isEdit ? 'Editar evento' : 'Novo evento'}
             </h2>
@@ -372,7 +372,7 @@ function EventFormDialog({
               value={title}
               onChange={e => setTitle(e.target.value)}
               placeholder="Descreva o evento"
-              className="w-full text-sm border border-gray-200 dark:border-gray-600 rounded-xl px-3.5 py-2.5 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 dark:focus:ring-indigo-900"
+              className="w-full text-sm border border-gray-200 dark:border-gray-600 rounded-xl px-3.5 py-2.5 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100 dark:focus:ring-amber-900"
             />
           </div>
 
@@ -387,14 +387,14 @@ function EventFormDialog({
                   onChange={e => setYear(e.target.value)}
                   placeholder="Ano *"
                   min={1000} max={2200}
-                  className="w-full text-sm border border-gray-200 dark:border-gray-600 rounded-xl px-3.5 py-2.5 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 dark:focus:ring-indigo-900"
+                  className="w-full text-sm border border-gray-200 dark:border-gray-600 rounded-xl px-3.5 py-2.5 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100 dark:focus:ring-amber-900"
                 />
               </div>
               <div className="w-28">
                 <select
                   value={month}
                   onChange={e => { setMonth(e.target.value); if (!e.target.value) setDay('') }}
-                  className="w-full text-sm border border-gray-200 dark:border-gray-600 rounded-xl px-2.5 py-2.5 bg-white dark:bg-gray-800 text-gray-900 dark:text-white outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 dark:focus:ring-indigo-900"
+                  className="w-full text-sm border border-gray-200 dark:border-gray-600 rounded-xl px-2.5 py-2.5 bg-white dark:bg-gray-800 text-gray-900 dark:text-white outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100 dark:focus:ring-amber-900"
                 >
                   <option value="">Mês</option>
                   {['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'].map((m, i) => (
@@ -410,7 +410,7 @@ function EventFormDialog({
                     onChange={e => setDay(e.target.value)}
                     placeholder="Dia"
                     min={1} max={31}
-                    className="w-full text-sm border border-gray-200 dark:border-gray-600 rounded-xl px-2.5 py-2.5 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 dark:focus:ring-indigo-900"
+                    className="w-full text-sm border border-gray-200 dark:border-gray-600 rounded-xl px-2.5 py-2.5 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100 dark:focus:ring-amber-900"
                   />
                 </div>
               )}
@@ -425,7 +425,7 @@ function EventFormDialog({
               onChange={e => setDescription(e.target.value)}
               placeholder="Detalhes sobre o evento (opcional)"
               rows={3}
-              className="w-full text-sm border border-gray-200 dark:border-gray-600 rounded-xl px-3.5 py-2.5 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 dark:focus:ring-indigo-900 resize-none"
+              className="w-full text-sm border border-gray-200 dark:border-gray-600 rounded-xl px-3.5 py-2.5 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100 dark:focus:ring-amber-900 resize-none"
             />
           </div>
 
@@ -462,7 +462,7 @@ function EventFormDialog({
           <button
             onClick={submit}
             disabled={!valid}
-            className="px-4 py-2 text-sm rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+            className="px-4 py-2 text-sm rounded-xl bg-amber-500 text-white hover:bg-amber-600 font-medium disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {isEdit ? 'Salvar alterações' : 'Adicionar'}
           </button>
@@ -557,7 +557,7 @@ export function LinhaDoTempoPage() {
   function exportPDF() {
     setExportOpen(false)
     const doc = new jsPDF({ unit: 'mm', format: 'a4' })
-    const primary: [number, number, number] = [79, 70, 229]
+    const primary: [number, number, number] = [217, 119, 6]
     doc.setFillColor(...primary)
     doc.rect(0, 0, 210, 28, 'F')
     doc.setTextColor(255, 255, 255)
@@ -660,8 +660,8 @@ export function LinhaDoTempoPage() {
       <div className="sticky top-0 z-30 bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 px-6 py-4">
         <div className="max-w-4xl mx-auto flex items-center justify-between gap-4">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center">
-              <Clock className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+            <div className="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center">
+              <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
             </div>
             <div>
               <h1 className="font-bold text-gray-900 dark:text-white text-base leading-none">Linha do Tempo</h1>
@@ -711,7 +711,7 @@ export function LinhaDoTempoPage() {
 
             <button
               onClick={() => setEventDialog({})}
-              className="flex items-center gap-1.5 px-3.5 py-2 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 font-medium transition-colors shadow-sm"
+              className="flex items-center gap-1.5 px-3.5 py-2 text-sm rounded-lg bg-amber-500 text-white hover:bg-amber-600 font-medium transition-colors shadow-sm"
             >
               <Plus className="w-4 h-4" />
               <span className="hidden sm:inline">Novo evento</span>
@@ -724,13 +724,13 @@ export function LinhaDoTempoPage() {
       <div className="max-w-4xl mx-auto px-4 py-10" ref={timelineRef}>
         {loading ? (
           <div className="flex flex-col items-center justify-center py-32 gap-3">
-            <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+            <div className="w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
             <p className="text-sm text-gray-400">Carregando…</p>
           </div>
         ) : sorted.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-32 gap-4 text-center">
-            <div className="w-16 h-16 rounded-2xl bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center">
-              <Clock className="w-8 h-8 text-indigo-400" />
+            <div className="w-16 h-16 rounded-2xl bg-amber-50 dark:bg-amber-900/30 flex items-center justify-center">
+              <Clock className="w-8 h-8 text-amber-400" />
             </div>
             <div>
               <p className="font-semibold text-gray-700 dark:text-gray-200 text-lg">Nenhum evento ainda</p>
@@ -738,7 +738,7 @@ export function LinhaDoTempoPage() {
             </div>
             <button
               onClick={() => setEventDialog({})}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500 text-white text-sm font-medium hover:bg-amber-600 transition-colors"
             >
               <Plus className="w-4 h-4" /> Adicionar evento
             </button>
@@ -746,14 +746,14 @@ export function LinhaDoTempoPage() {
         ) : (
           <div className="relative">
             {/* Spine — centered on desktop, left on mobile */}
-            <div className="absolute left-4 lg:left-1/2 inset-y-0 w-0.5 bg-indigo-100 dark:bg-indigo-900/60 lg:-translate-x-px" />
+            <div className="absolute left-4 lg:left-1/2 inset-y-0 w-0.5 bg-amber-100 dark:bg-amber-900/60 lg:-translate-x-px" />
 
             {renderItems.map((item, idx) => {
               if (item.type === 'year') {
                 return (
                   <div key={`y-${item.year}-${idx}`} className="relative flex lg:justify-center justify-start pl-0 lg:pl-0 mb-4 mt-6 first:mt-0">
                     <div className="ml-0 lg:ml-0 flex items-center gap-2 pl-8 lg:pl-0">
-                      <span className="relative z-10 bg-indigo-600 text-white text-xs font-bold px-4 py-1.5 rounded-full shadow-sm">
+                      <span className="relative z-10 bg-amber-500 text-white text-xs font-bold px-4 py-1.5 rounded-full shadow-sm">
                         {item.year}
                       </span>
                     </div>
@@ -766,9 +766,9 @@ export function LinhaDoTempoPage() {
                 const firstCat = event.category_ids[0]
                 if (firstCat) {
                   const cat = data.categories.find(c => c.id === firstCat)
-                  if (cat) return PALETTE[cat.color]?.dot ?? '#6366f1'
+                  if (cat) return PALETTE[cat.color]?.dot ?? '#f59e0b'
                 }
-                return '#6366f1'
+                return '#f59e0b'
               })()
 
               return (
