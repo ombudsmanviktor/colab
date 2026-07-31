@@ -1,6 +1,6 @@
 // ─── In-memory demo store ──────────────────────────────────────────────────
 
-import type { UsersIndex, UserTasks, UserProfile, OrdemDoDia, AtaDecisao, Leitura, SugestaoMessage } from '@/types'
+import type { UsersIndex, UserTasks, UserProfile, OrdemDoDia, AtaDecisao, Leitura, SugestaoMessage, Orientacao, TarefaOrientacao } from '@/types'
 
 export const DEMO_EMAIL = 'demo@colab.app'
 export const DEMO_EMAIL2 = 'ana@grupo.edu.br'
@@ -158,6 +158,73 @@ const DEMO_SUGESTOES: SugestaoMessage[] = [
   },
 ]
 
+const DEMO_ORIENTACOES: Orientacao[] = [
+  {
+    id: 'demo-ori-1',
+    nome_orientando: 'Ana Silva',
+    curso: 'Doutorado',
+    titulo_provisorio: 'Memória e identidade digital em comunidades virtuais',
+    ano_ingresso: 2022,
+    previsao_conclusao: '2026/1',
+    exame_qualificacao: true,
+    leituras: ['Halbwachs, Maurice — A memória coletiva', 'Castells, Manuel — A sociedade em rede'],
+    links_documentos: ['https://drive.google.com/exemplo-ana'],
+    reunioes: [
+      { id: 'r1', data: '2026-07-10', texto: 'Discussão do terceiro capítulo. Ana apresentou revisão metodológica com bons avanços. Próximo passo: análise dos dados coletados.' },
+      { id: 'r2', data: '2026-05-20', texto: 'Revisão do capítulo 2. Ajustes no referencial teórico necessários.' },
+    ],
+    created_at: new Date(Date.now() - 200 * 86400000).toISOString(),
+    updated_at: NOW,
+  },
+  {
+    id: 'demo-ori-2',
+    nome_orientando: 'Carlos Mendes',
+    curso: 'Mestrado',
+    titulo_provisorio: 'Discurso político nas redes sociais durante eleições',
+    ano_ingresso: 2024,
+    previsao_conclusao: '2026/2',
+    exame_qualificacao: false,
+    leituras: ['Van Dijk, Teun — Discurso e poder'],
+    reunioes: [
+      { id: 'r3', data: '2026-07-05', texto: 'Carlos apresentou o projeto de qualificação. Recomendei expandir o corpus de análise.' },
+    ],
+    created_at: new Date(Date.now() - 80 * 86400000).toISOString(),
+    updated_at: NOW,
+  },
+  {
+    id: 'demo-ori-3',
+    nome_orientando: 'Beatriz Santos',
+    curso: 'Iniciação Científica',
+    titulo_provisorio: 'Representações de gênero no jornalismo esportivo',
+    ano_ingresso: 2025,
+    leituras: [],
+    reunioes: [],
+    created_at: new Date(Date.now() - 30 * 86400000).toISOString(),
+    updated_at: NOW,
+  },
+  {
+    id: 'demo-ori-4',
+    nome_orientando: 'Roberto Lima',
+    curso: 'Doutorado',
+    titulo_provisorio: 'Plataformização da comunicação científica',
+    ano_ingresso: 2019,
+    previsao_conclusao: '2024/2',
+    exame_qualificacao: true,
+    arquivada: true,
+    leituras: [],
+    reunioes: [],
+    created_at: new Date(Date.now() - 600 * 86400000).toISOString(),
+    updated_at: new Date(Date.now() - 60 * 86400000).toISOString(),
+  },
+]
+
+const DEMO_TAREFAS_ORIENTACAO: TarefaOrientacao[] = [
+  { id: 'to1', orientacao_id: 'demo-ori-1', descricao: 'Enviar capítulo 3 revisado', concluida: false, created_at: NOW },
+  { id: 'to2', orientacao_id: 'demo-ori-1', descricao: 'Agendar reunião de qualificação', concluida: true, created_at: NOW },
+  { id: 'to3', orientacao_id: 'demo-ori-2', descricao: 'Definir corpus de análise', concluida: false, created_at: NOW },
+  { id: 'to4', orientacao_id: 'demo-ori-2', descricao: 'Ler Van Dijk capítulos 3-5', concluida: false, created_at: NOW },
+]
+
 // ─── Mutable store ─────────────────────────────────────────────────────────
 
 interface DemoStore {
@@ -168,6 +235,8 @@ interface DemoStore {
   atas: AtaDecisao[]
   leituras: Leitura[]
   sugestoes: SugestaoMessage[]
+  orientacoes: Orientacao[]
+  tarefasOrientacao: TarefaOrientacao[]
 }
 
 function buildStore(): DemoStore {
@@ -179,6 +248,8 @@ function buildStore(): DemoStore {
     atas: JSON.parse(JSON.stringify(DEMO_ATAS)),
     leituras: JSON.parse(JSON.stringify(DEMO_LEITURAS)),
     sugestoes: JSON.parse(JSON.stringify(DEMO_SUGESTOES)),
+    orientacoes: JSON.parse(JSON.stringify(DEMO_ORIENTACOES)),
+    tarefasOrientacao: JSON.parse(JSON.stringify(DEMO_TAREFAS_ORIENTACAO)),
   }
 }
 
@@ -243,3 +314,23 @@ export function demoSaveSugestao(msg: SugestaoMessage): void {
   else _store.sugestoes.push(JSON.parse(JSON.stringify(msg)))
 }
 export function demoDeleteSugestao(id: string): void { _store.sugestoes = _store.sugestoes.filter(x => x.id !== id) }
+
+export function demoLoadOrientacoes(): { orientacoes: Orientacao[]; tarefas: TarefaOrientacao[] } {
+  return {
+    orientacoes: JSON.parse(JSON.stringify(_store.orientacoes)),
+    tarefas: JSON.parse(JSON.stringify(_store.tarefasOrientacao)),
+  }
+}
+export function demoSaveOrientacao(o: Orientacao, allTarefas: TarefaOrientacao[]): void {
+  _store.orientacoes = _store.orientacoes.some(x => x.id === o.id)
+    ? _store.orientacoes.map(x => x.id === o.id ? JSON.parse(JSON.stringify(o)) : x)
+    : [JSON.parse(JSON.stringify(o)), ..._store.orientacoes]
+  _store.tarefasOrientacao = [
+    ..._store.tarefasOrientacao.filter(t => t.orientacao_id !== o.id),
+    ...allTarefas.filter(t => t.orientacao_id === o.id).map(t => JSON.parse(JSON.stringify(t))),
+  ]
+}
+export function demoDeleteOrientacao(id: string): void {
+  _store.orientacoes = _store.orientacoes.filter(x => x.id !== id)
+  _store.tarefasOrientacao = _store.tarefasOrientacao.filter(t => t.orientacao_id !== id)
+}

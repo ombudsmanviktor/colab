@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, ClipboardList, FileText, BookOpen, Users, MessageSquare,
-  Menu, X, LogOut, Sun, Moon, Settings, PanelLeftClose, PanelLeftOpen,
+  Menu, X, LogOut, Sun, Moon, Settings, PanelLeftClose, PanelLeftOpen, GraduationCap,
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useTheme } from '@/contexts/ThemeContext'
@@ -43,6 +43,13 @@ const NAV_ITEMS = [
     icon: MessageSquare,
     activeClass: 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300',
     iconClass: 'text-amber-600',
+  },
+  {
+    to: '/app/orientacoes',
+    label: 'Orientações',
+    icon: GraduationCap,
+    activeClass: 'bg-pink-50 text-pink-700 dark:bg-pink-950/50 dark:text-pink-300',
+    iconClass: 'text-pink-600',
   },
   {
     to: '/app/usuarios',

@@ -108,6 +108,49 @@ export interface SugestaoMessage {
   mentions?: string[] // emails mentioned in the message
 }
 
+// ─── Orientações ──────────────────────────────────────────────────────────
+
+export interface Anexo {
+  id: string
+  name: string
+  size: number
+  url: string
+  type: string
+  path?: string
+}
+
+export interface NotaReuniao {
+  id: string
+  data?: string
+  texto: string
+  anexo?: Anexo
+}
+
+export interface Orientacao {
+  id: string
+  nome_orientando: string
+  curso: string
+  titulo_provisorio?: string
+  ano_ingresso?: number
+  previsao_conclusao?: string
+  exame_qualificacao?: boolean
+  arquivada?: boolean
+  leituras?: string[]
+  reunioes?: NotaReuniao[]
+  links_documentos?: string[]
+  projeto_original?: Anexo
+  created_at: string
+  updated_at: string
+}
+
+export interface TarefaOrientacao {
+  id: string
+  orientacao_id: string
+  descricao: string
+  concluida: boolean
+  created_at: string
+}
+
 // ─── Leituras Recomendadas ────────────────────────────────────────────────
 
 export interface Leitura {

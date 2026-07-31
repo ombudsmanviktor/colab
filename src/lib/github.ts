@@ -109,6 +109,30 @@ export async function writeTextFile(
   )
 }
 
+export async function writeBinaryFile(
+  cfg: GitHubConfig,
+  filePath: string,
+  file: File,
+  message: string,
+  sha?: string
+): Promise<{ content: { sha: string } }> {
+  const buf = await file.arrayBuffer()
+  const bytes = new Uint8Array(buf)
+  const binStr = Array.from(bytes, b => String.fromCodePoint(b)).join('')
+  const b64 = btoa(binStr)
+  const body: Record<string, string> = { message, content: b64, branch: cfg.branch }
+  if (sha) body.sha = sha
+  return ghFetch<{ content: { sha: string } }>(
+    cfg,
+    `/repos/${cfg.owner}/${cfg.repo}/contents/${filePath}`,
+    { method: 'PUT', body: JSON.stringify(body) }
+  )
+}
+
+export function getRawUrl(cfg: GitHubConfig, filePath: string): string {
+  return `https://raw.githubusercontent.com/${cfg.owner}/${cfg.repo}/${cfg.branch}/${filePath}`
+}
+
 export async function deleteFile(
   cfg: GitHubConfig,
   filePath: string,

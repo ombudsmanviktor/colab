@@ -5,12 +5,14 @@ import {
   getGitHubConfig,
   readFile,
   writeTextFile,
+  writeBinaryFile,
   deleteFile,
   listDirectory,
   decodeContent,
+  getRawUrl,
   type GitHubConfig,
 } from './github'
-import type { UsersIndex, UserTasks, UserProfile, OrdemDoDia, AtaDecisao, Leitura, SugestaoMessage } from '@/types'
+import type { UsersIndex, UserTasks, UserProfile, OrdemDoDia, AtaDecisao, Leitura, SugestaoMessage, Orientacao, TarefaOrientacao, Anexo } from '@/types'
 import type { AppRepoConfig } from '@/lib/appConfig'
 import { emailSlug, generateId } from './utils'
 import {
@@ -22,6 +24,7 @@ import {
   demoLoadAtas, demoSaveAta, demoDeleteAta,
   demoLoadLeituras, demoSaveLeitura, demoDeleteLeitura,
   demoLoadSugestoes, demoSaveSugestao, demoDeleteSugestao,
+  demoLoadOrientacoes, demoSaveOrientacao, demoDeleteOrientacao,
 } from './demoStore'
 
 // ─── SHA cache ────────────────────────────────────────────────────────────
@@ -329,6 +332,82 @@ export async function saveSugestao(msg: SugestaoMessage): Promise<void> {
 export async function deleteSugestao(id: string): Promise<void> {
   if (isDemoMode()) { demoDeleteSugestao(id); return }
   await removeYaml(`sugestoes/${id}.yaml`, `Delete sugestão ${id}`)
+}
+
+// ─── Orientações ──────────────────────────────────────────────────────────
+
+type StoredAnexo = { id: string; name: string; size: number; type: string; path: string }
+
+type StoredOrientacao = Omit<Orientacao, 'projeto_original'> & {
+  projeto_original?: StoredAnexo
+  tarefas: Omit<TarefaOrientacao, 'orientacao_id'>[]
+}
+
+function storedToAnexo(sa: StoredAnexo): Anexo {
+  return { ...sa, url: getRawUrl(cfg(), sa.path) }
+}
+
+function anexoToStored(a: Anexo): StoredAnexo {
+  return { id: a.id, name: a.name, size: a.size, type: a.type, path: a.path ?? '' }
+}
+
+export async function loadOrientacoes(): Promise<{ orientacoes: Orientacao[]; tarefas: TarefaOrientacao[] }> {
+  if (isDemoMode()) return demoLoadOrientacoes()
+  try {
+    const entries = await listDirectory(cfg(), 'orientacoes')
+    const files = entries.filter(e => e.type === 'file' && e.name.endsWith('.yaml'))
+    const docs = await Promise.all(files.map(f => readYaml<StoredOrientacao>(`orientacoes/${f.name}`)))
+    const orientacoes: Orientacao[] = []
+    const tarefas: TarefaOrientacao[] = []
+    for (const doc of docs) {
+      if (!doc) continue
+      const { tarefas: docTarefas, projeto_original, ...rest } = doc
+      orientacoes.push({ ...rest, projeto_original: projeto_original ? storedToAnexo(projeto_original) : undefined })
+      for (const t of docTarefas ?? []) {
+        tarefas.push({ ...t, orientacao_id: doc.id })
+      }
+    }
+    return { orientacoes, tarefas }
+  } catch {
+    return { orientacoes: [], tarefas: [] }
+  }
+}
+
+export async function saveOrientacaoFile(orientacao: Orientacao, allTarefas: TarefaOrientacao[]): Promise<void> {
+  if (isDemoMode()) { demoSaveOrientacao(orientacao, allTarefas); return }
+  const myTarefas = allTarefas.filter(t => t.orientacao_id === orientacao.id)
+  const { projeto_original, ...rest } = orientacao
+  const doc: StoredOrientacao = {
+    ...rest,
+    ...(projeto_original ? { projeto_original: anexoToStored(projeto_original) } : {}),
+    tarefas: myTarefas.map(({ orientacao_id: _oid, ...t }) => t),
+  }
+  await writeYaml(`orientacoes/${orientacao.id}.yaml`, doc, `Update orientação ${orientacao.id}`)
+}
+
+export async function deleteOrientacaoFile(id: string): Promise<void> {
+  if (isDemoMode()) { demoDeleteOrientacao(id); return }
+  await removeYaml(`orientacoes/${id}.yaml`, `Delete orientação ${id}`)
+}
+
+export async function uploadAnexo(entityType: string, entityId: string, file: File): Promise<Anexo> {
+  const c = cfg()
+  const filePath = `attachments/${entityType}/${entityId}/${file.name}`
+  let existingSha: string | undefined
+  try {
+    const existing = await readFile(c, filePath)
+    existingSha = existing.sha
+  } catch { /* new file */ }
+  const result = await writeBinaryFile(c, filePath, file, `Upload ${file.name}`, existingSha)
+  shaCache.set(filePath, result.content.sha)
+  return {
+    id: crypto.randomUUID(),
+    name: file.name,
+    size: file.size,
+    type: file.type,
+    path: filePath,
+    url: getRawUrl(c, filePath),
+  }
 }
 
 // ─── App config (users/app-config.yaml in data repo) ─────────────────────
