@@ -48,8 +48,8 @@ const NAV_ITEMS = [
     to: '/app/orientacoes',
     label: 'Orientações',
     icon: GraduationCap,
-    activeClass: 'bg-pink-50 text-pink-700 dark:bg-pink-950/50 dark:text-pink-300',
-    iconClass: 'text-pink-600',
+    activeClass: 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300',
+    iconClass: 'text-amber-600',
   },
   {
     to: '/app/linha-do-tempo',

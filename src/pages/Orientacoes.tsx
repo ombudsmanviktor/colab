@@ -81,7 +81,7 @@ function exportPDF(orientacoes: Orientacao[]) {
       o.ano_ingresso ? String(o.ano_ingresso) : '—', o.previsao_conclusao ?? '—',
     ]),
     styles: { fontSize: 9 },
-    headStyles: { fillColor: [190, 24, 93] },
+    headStyles: { fillColor: [217, 119, 6] },
   })
   doc.save('orientacoes.pdf')
 }
@@ -152,7 +152,7 @@ function exportAllYAML(orientacoes: Orientacao[], tarefas: TarefaOrientacao[]) {
 const CURSOS = ['Doutorado', 'Mestrado', 'Iniciação Científica', 'TCC', 'Pós-Doutorado']
 
 const CURSO_COLORS: Record<string, string> = {
-  Doutorado: 'bg-pink-100 text-pink-700',
+  Doutorado: 'bg-amber-100 text-amber-700',
   Mestrado: 'bg-purple-100 text-purple-700',
   'Iniciação Científica': 'bg-blue-100 text-blue-700',
   TCC: 'bg-teal-100 text-teal-700',
@@ -592,8 +592,8 @@ export function OrientacoesPage() {
       {/* ── Page header ── */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-pink-100 flex items-center justify-center">
-            <GraduationCap className="w-5 h-5 text-pink-600" />
+          <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center">
+            <GraduationCap className="w-5 h-5 text-amber-600" />
           </div>
           <div>
             <h1 className="text-xl font-bold text-gray-900 dark:text-white">Orientações</h1>
@@ -638,7 +638,7 @@ export function OrientacoesPage() {
           <Card key={c}>
             <CardContent className="pt-5 pb-4">
               <p className="text-xs text-gray-500 dark:text-gray-400 leading-tight">{c}</p>
-              <p className="text-3xl font-bold text-pink-700">
+              <p className="text-3xl font-bold text-amber-700">
                 {activeOrientacoes.filter(o => o.curso === c).length}
               </p>
             </CardContent>
@@ -649,7 +649,7 @@ export function OrientacoesPage() {
       {/* ── List ── */}
       {loading ? (
         <div className="flex justify-center py-16">
-          <div className="w-8 h-8 border-4 border-gray-200 dark:border-gray-700 border-t-pink-500 rounded-full animate-spin" />
+          <div className="w-8 h-8 border-4 border-gray-200 dark:border-gray-700 border-t-amber-500 rounded-full animate-spin" />
         </div>
       ) : orientacoes.length === 0 ? (
         <Card>
@@ -692,8 +692,8 @@ export function OrientacoesPage() {
                       className="flex items-center gap-3 px-6 py-4 cursor-pointer"
                       onClick={() => setExpanded(isOpen ? null : o.id)}
                     >
-                      <div className="w-9 h-9 rounded-full bg-pink-100 flex items-center justify-center flex-shrink-0">
-                        <span className="text-sm font-bold text-pink-700">
+                      <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+                        <span className="text-sm font-bold text-amber-700">
                           {o.nome_orientando.charAt(0)}
                         </span>
                       </div>
@@ -763,7 +763,7 @@ export function OrientacoesPage() {
                               {sortedReunioes.map((r, idx) => (
                                 <div key={r.id} className="flex gap-3 group">
                                   <div className="flex flex-col items-center pt-1.5 flex-shrink-0">
-                                    <div className="w-2 h-2 rounded-full bg-pink-400 flex-shrink-0" />
+                                    <div className="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0" />
                                     {idx < sortedReunioes.length - 1 && (
                                       <div className="w-px flex-1 bg-gray-200 dark:bg-gray-700 my-1" style={{ minHeight: 24 }} />
                                     )}
