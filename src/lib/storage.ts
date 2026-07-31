@@ -12,7 +12,7 @@ import {
   getRawUrl,
   type GitHubConfig,
 } from './github'
-import type { UsersIndex, UserTasks, UserProfile, OrdemDoDia, AtaDecisao, Leitura, SugestaoMessage, Orientacao, TarefaOrientacao, Anexo } from '@/types'
+import type { UsersIndex, UserTasks, UserProfile, OrdemDoDia, AtaDecisao, Leitura, SugestaoMessage, Orientacao, TarefaOrientacao, Anexo, TimelineData } from '@/types'
 import type { AppRepoConfig } from '@/lib/appConfig'
 import { emailSlug, generateId } from './utils'
 import {
@@ -25,6 +25,7 @@ import {
   demoLoadLeituras, demoSaveLeitura, demoDeleteLeitura,
   demoLoadSugestoes, demoSaveSugestao, demoDeleteSugestao,
   demoLoadOrientacoes, demoSaveOrientacao, demoDeleteOrientacao,
+  demoLoadTimeline, demoSaveTimeline,
 } from './demoStore'
 
 // ─── SHA cache ────────────────────────────────────────────────────────────
@@ -408,6 +409,22 @@ export async function uploadAnexo(entityType: string, entityId: string, file: Fi
     path: filePath,
     url: getRawUrl(c, filePath),
   }
+}
+
+// ─── Linha do Tempo ───────────────────────────────────────────────────────
+
+const TIMELINE_PATH = 'timeline/data.yaml'
+const EMPTY_TIMELINE: TimelineData = { events: [], categories: [] }
+
+export async function loadTimeline(): Promise<TimelineData> {
+  if (isDemoMode()) return demoLoadTimeline()
+  const data = await readYaml<TimelineData>(TIMELINE_PATH)
+  return data ?? EMPTY_TIMELINE
+}
+
+export async function saveTimeline(data: TimelineData): Promise<void> {
+  if (isDemoMode()) { demoSaveTimeline(data); return }
+  await writeYaml(TIMELINE_PATH, data, 'Update linha do tempo')
 }
 
 // ─── App config (users/app-config.yaml in data repo) ─────────────────────

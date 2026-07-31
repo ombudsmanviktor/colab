@@ -151,6 +151,31 @@ export interface TarefaOrientacao {
   created_at: string
 }
 
+// ─── Linha do Tempo ───────────────────────────────────────────────────────
+
+export interface TimelineCategory {
+  id: string
+  name: string
+  color: string
+}
+
+export interface TimelineEvent {
+  id: string
+  title: string
+  description?: string
+  year: number
+  month?: number
+  day?: number
+  category_ids: string[]
+  created_at: string
+  updated_at: string
+}
+
+export interface TimelineData {
+  events: TimelineEvent[]
+  categories: TimelineCategory[]
+}
+
 // ─── Leituras Recomendadas ────────────────────────────────────────────────
 
 export interface Leitura {

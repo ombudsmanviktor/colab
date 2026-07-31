@@ -14,6 +14,7 @@ import { Sugestoes } from '@/pages/Sugestoes'
 import { Usuarios } from '@/pages/Usuarios'
 import { Settings } from '@/pages/Settings'
 import { OrientacoesPage } from '@/pages/Orientacoes'
+import { LinhaDoTempoPage } from '@/pages/LinhaDoTempo'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -49,6 +50,7 @@ export default function App() {
                 <Route path="sugestoes" element={<Sugestoes />} />
                 <Route path="usuarios" element={<Usuarios />} />
                 <Route path="orientacoes" element={<OrientacoesPage />} />
+                <Route path="linha-do-tempo" element={<LinhaDoTempoPage />} />
                 <Route path="settings" element={<Settings />} />
               </Route>
               <Route path="/" element={<Navigate to="/app/visao-geral" replace />} />

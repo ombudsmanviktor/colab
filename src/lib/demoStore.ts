@@ -1,6 +1,6 @@
 // ─── In-memory demo store ──────────────────────────────────────────────────
 
-import type { UsersIndex, UserTasks, UserProfile, OrdemDoDia, AtaDecisao, Leitura, SugestaoMessage, Orientacao, TarefaOrientacao } from '@/types'
+import type { UsersIndex, UserTasks, UserProfile, OrdemDoDia, AtaDecisao, Leitura, SugestaoMessage, Orientacao, TarefaOrientacao, TimelineData, TimelineEvent, TimelineCategory } from '@/types'
 
 export const DEMO_EMAIL = 'demo@colab.app'
 export const DEMO_EMAIL2 = 'ana@grupo.edu.br'
@@ -225,6 +225,77 @@ const DEMO_TAREFAS_ORIENTACAO: TarefaOrientacao[] = [
   { id: 'to4', orientacao_id: 'demo-ori-2', descricao: 'Ler Van Dijk capítulos 3-5', concluida: false, created_at: NOW },
 ]
 
+const DEMO_TIMELINE_CATEGORIES: TimelineCategory[] = [
+  { id: 'tc1', name: 'Publicação', color: 'indigo' },
+  { id: 'tc2', name: 'Evento', color: 'violet' },
+  { id: 'tc3', name: 'Projeto', color: 'teal' },
+  { id: 'tc4', name: 'Premiação', color: 'amber' },
+  { id: 'tc5', name: 'Parceria', color: 'sky' },
+]
+
+const DEMO_TIMELINE_EVENTS: TimelineEvent[] = [
+  {
+    id: 'te1', title: 'Fundação do grupo coLAB/UFF',
+    description: 'O grupo de pesquisa coLAB foi fundado com foco em comunicação digital e cultura de plataformas.',
+    year: 2019, month: 3, category_ids: ['tc3'],
+    created_at: NOW, updated_at: NOW,
+  },
+  {
+    id: 'te2', title: 'Publicação do primeiro artigo coletivo',
+    description: 'Artigo "Plataformas e mediação algorítmica" publicado na Revista de Comunicação.',
+    year: 2019, month: 8, category_ids: ['tc1'],
+    created_at: NOW, updated_at: NOW,
+  },
+  {
+    id: 'te3', title: 'Parceria com Universidade de Coimbra',
+    description: 'Início da colaboração internacional para projeto sobre desinformação.',
+    year: 2020, month: 6, category_ids: ['tc5'],
+    created_at: NOW, updated_at: NOW,
+  },
+  {
+    id: 'te4', title: 'Seminário Internacional de Comunicação Digital',
+    description: 'Organização do evento com 12 palestrantes de 6 países.',
+    year: 2021, month: 4, category_ids: ['tc2'],
+    created_at: NOW, updated_at: NOW,
+  },
+  {
+    id: 'te5', title: 'Prêmio COMPÓS de Pesquisa',
+    description: 'Reconhecimento pela contribuição à área de comunicação e tecnologia.',
+    year: 2021, month: 11, category_ids: ['tc4'],
+    created_at: NOW, updated_at: NOW,
+  },
+  {
+    id: 'te6', title: 'Lançamento do projeto PesquisaLAB',
+    description: 'Plataforma digital para gestão colaborativa de projetos de pesquisa.',
+    year: 2022, month: 2, category_ids: ['tc3', 'tc5'],
+    created_at: NOW, updated_at: NOW,
+  },
+  {
+    id: 'te7', title: 'Artigo no Journal of Communication',
+    description: 'Publicação em periódico internacional Qualis A1 sobre cultura de memes.',
+    year: 2023, month: 5, category_ids: ['tc1'],
+    created_at: NOW, updated_at: NOW,
+  },
+  {
+    id: 'te8', title: 'Jornada de Pesquisa 2024',
+    description: 'Evento anual do grupo com apresentação dos projetos em andamento.',
+    year: 2024, month: 10, category_ids: ['tc2'],
+    created_at: NOW, updated_at: NOW,
+  },
+  {
+    id: 'te9', title: 'Edital CNPq aprovado',
+    description: 'Projeto "Plataformização da esfera pública" aprovado com bolsas de pesquisa.',
+    year: 2025, month: 1, category_ids: ['tc3'],
+    created_at: NOW, updated_at: NOW,
+  },
+  {
+    id: 'te10', title: 'Coletânea publicada pela EdUFF',
+    description: 'Livro "Comunicação em rede: perspectivas críticas" com capítulos do grupo.',
+    year: 2026, month: 3, category_ids: ['tc1', 'tc2'],
+    created_at: NOW, updated_at: NOW,
+  },
+]
+
 // ─── Mutable store ─────────────────────────────────────────────────────────
 
 interface DemoStore {
@@ -237,6 +308,7 @@ interface DemoStore {
   sugestoes: SugestaoMessage[]
   orientacoes: Orientacao[]
   tarefasOrientacao: TarefaOrientacao[]
+  timeline: TimelineData
 }
 
 function buildStore(): DemoStore {
@@ -250,6 +322,7 @@ function buildStore(): DemoStore {
     sugestoes: JSON.parse(JSON.stringify(DEMO_SUGESTOES)),
     orientacoes: JSON.parse(JSON.stringify(DEMO_ORIENTACOES)),
     tarefasOrientacao: JSON.parse(JSON.stringify(DEMO_TAREFAS_ORIENTACAO)),
+    timeline: JSON.parse(JSON.stringify({ events: DEMO_TIMELINE_EVENTS, categories: DEMO_TIMELINE_CATEGORIES })),
   }
 }
 
@@ -333,4 +406,11 @@ export function demoSaveOrientacao(o: Orientacao, allTarefas: TarefaOrientacao[]
 export function demoDeleteOrientacao(id: string): void {
   _store.orientacoes = _store.orientacoes.filter(x => x.id !== id)
   _store.tarefasOrientacao = _store.tarefasOrientacao.filter(t => t.orientacao_id !== id)
+}
+
+export function demoLoadTimeline(): TimelineData {
+  return JSON.parse(JSON.stringify(_store.timeline))
+}
+export function demoSaveTimeline(data: TimelineData): void {
+  _store.timeline = JSON.parse(JSON.stringify(data))
 }

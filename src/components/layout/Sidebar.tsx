@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, ClipboardList, FileText, BookOpen, Users, MessageSquare,
-  Menu, X, LogOut, Sun, Moon, Settings, PanelLeftClose, PanelLeftOpen, GraduationCap,
+  Menu, X, LogOut, Sun, Moon, Settings, PanelLeftClose, PanelLeftOpen, GraduationCap, Clock,
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useTheme } from '@/contexts/ThemeContext'
@@ -50,6 +50,13 @@ const NAV_ITEMS = [
     icon: GraduationCap,
     activeClass: 'bg-pink-50 text-pink-700 dark:bg-pink-950/50 dark:text-pink-300',
     iconClass: 'text-pink-600',
+  },
+  {
+    to: '/app/linha-do-tempo',
+    label: 'Linha do Tempo',
+    icon: Clock,
+    activeClass: 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300',
+    iconClass: 'text-indigo-600',
   },
   {
     to: '/app/usuarios',
