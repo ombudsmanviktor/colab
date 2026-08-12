@@ -99,6 +99,24 @@ const PROSE_CLS = [
   'prose-code:bg-amber-50 dark:prose-code:bg-amber-950/30 prose-code:text-amber-800 dark:prose-code:text-amber-300 prose-code:rounded prose-code:px-1',
 ].join(' ')
 
+// Allow data: URIs (demo mode uploads) and standard web schemes; block javascript:
+function safeUrl(url: string): string {
+  if (url.startsWith('data:image/')) return url
+  if (/^(https?|mailto|tel):/i.test(url)) return url
+  if (!url.includes(':')) return url // relative
+  return ''
+}
+
+// Extract H1–H3 headings from raw markdown content
+function extractHeadings(content: string): { level: number; text: string }[] {
+  return content
+    .split('\n')
+    .flatMap(line => {
+      const m = line.match(/^(#{1,3})\s+(.+)$/)
+      return m ? [{ level: m[1].length, text: m[2].trim() }] : []
+    })
+}
+
 function MdPreview({ content }: { content: string }) {
   if (!content.trim()) {
     return <p className="text-sm text-gray-300 dark:text-gray-600 italic">O preview aparece aqui…</p>
@@ -107,9 +125,10 @@ function MdPreview({ content }: { content: string }) {
     <div className={PROSE_CLS}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
+        urlTransform={safeUrl}
         components={{
           img: ({ src, alt }) => (
-            <img src={src} alt={alt ?? ''} className="max-w-full rounded-lg shadow-sm my-3" />
+            <img src={src ?? ''} alt={alt ?? ''} className="max-w-full rounded-lg shadow-sm my-3" />
           ),
         }}
       >
@@ -441,9 +460,10 @@ function WikiViewer({ entry, onEdit, onDelete }: {
           <div className={PROSE_CLS}>
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
+              urlTransform={safeUrl}
               components={{
                 img: ({ src, alt }) => (
-                  <img src={src} alt={alt ?? ''} className="max-w-full rounded-lg shadow-sm my-3" />
+                  <img src={src ?? ''} alt={alt ?? ''} className="max-w-full rounded-lg shadow-sm my-3" />
                 ),
               }}
             >
@@ -459,6 +479,12 @@ function WikiViewer({ entry, onEdit, onDelete }: {
 }
 
 // ─── Table of Contents (home view) ───────────────────────────────────────
+
+const HEADING_INDENT: Record<number, string> = {
+  1: 'pl-9',
+  2: 'pl-12',
+  3: 'pl-16',
+}
 
 function WikiToc({ entries, onSelectEntry, onNew }: {
   entries: WikiEntry[]
@@ -481,22 +507,39 @@ function WikiToc({ entries, onSelectEntry, onNew }: {
             </Button>
           </div>
         ) : (
-          <ol className="space-y-0.5">
-            {entries.map((entry, i) => (
-              <li key={entry.id}>
-                <button
-                  onClick={() => onSelectEntry(entry.id)}
-                  className="flex items-baseline gap-3 text-left w-full py-1.5 px-2 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-950/30 group transition-colors"
-                >
-                  <span className="text-xs text-gray-400 dark:text-gray-600 w-5 text-right flex-shrink-0 tabular-nums">
-                    {i + 1}.
-                  </span>
-                  <span className="text-sm text-amber-700 dark:text-amber-400 group-hover:underline">
-                    {entry.title}
-                  </span>
-                </button>
-              </li>
-            ))}
+          <ol className="space-y-3">
+            {entries.map((entry, i) => {
+              const headings = extractHeadings(entry.content)
+              return (
+                <li key={entry.id}>
+                  <button
+                    onClick={() => onSelectEntry(entry.id)}
+                    className="flex items-baseline gap-3 text-left w-full py-1.5 px-2 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-950/30 group transition-colors"
+                  >
+                    <span className="text-xs text-gray-400 dark:text-gray-600 w-5 text-right flex-shrink-0 tabular-nums">
+                      {i + 1}.
+                    </span>
+                    <span className="text-sm font-semibold text-amber-700 dark:text-amber-400 group-hover:underline">
+                      {entry.title}
+                    </span>
+                  </button>
+                  {headings.length > 0 && (
+                    <ul className="mt-0.5 space-y-0.5">
+                      {headings.map((h, j) => (
+                        <li key={j}>
+                          <button
+                            onClick={() => onSelectEntry(entry.id)}
+                            className={`flex items-center text-left w-full py-0.5 px-2 rounded text-xs text-gray-500 dark:text-gray-400 hover:text-amber-600 dark:hover:text-amber-400 transition-colors ${HEADING_INDENT[h.level] ?? 'pl-9'}`}
+                          >
+                            <span className="truncate">{h.text}</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </li>
+              )
+            })}
           </ol>
         )}
       </div>
@@ -705,6 +748,22 @@ export function WikiPage() {
                 </button>
               )}
             </div>
+          </div>
+
+          {/* Fixed: Índice (ToC) entry — always at top, never draggable */}
+          <div className="flex-shrink-0">
+            <button
+              onClick={() => { setSelectedId(null); setEditingId(null); setShowMobileEntry(true) }}
+              className={`w-full text-left flex items-center gap-2 px-4 py-2.5 border-l-2 transition-colors ${
+                selectedId === null
+                  ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300'
+                  : 'border-transparent hover:bg-white dark:hover:bg-gray-800/60 text-gray-600 dark:text-gray-400'
+              }`}
+            >
+              <BookText className="w-3.5 h-3.5 flex-shrink-0 opacity-70" />
+              <span className="text-sm font-medium">Índice</span>
+            </button>
+            <div className="border-b border-gray-100 dark:border-gray-800 mx-0" />
           </div>
 
           {/* Entries: D&D when not searching, plain list when searching */}
