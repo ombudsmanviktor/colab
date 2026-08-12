@@ -12,7 +12,7 @@ import {
   getRawUrl,
   type GitHubConfig,
 } from './github'
-import type { UsersIndex, UserTasks, UserProfile, OrdemDoDia, AtaDecisao, Leitura, Producao, SugestaoMessage, Orientacao, TarefaOrientacao, Anexo, TimelineData } from '@/types'
+import type { UsersIndex, UserTasks, UserProfile, OrdemDoDia, AtaDecisao, Leitura, Producao, SugestaoMessage, Orientacao, TarefaOrientacao, Anexo, TimelineData, CalloutData } from '@/types'
 import type { AppRepoConfig } from '@/lib/appConfig'
 import { emailSlug, generateId } from './utils'
 import {
@@ -27,6 +27,7 @@ import {
   demoLoadSugestoes, demoSaveSugestao, demoDeleteSugestao,
   demoLoadOrientacoes, demoSaveOrientacao, demoDeleteOrientacao,
   demoLoadTimeline, demoSaveTimeline,
+  demoLoadCallout, demoSaveCallout,
 } from './demoStore'
 
 // ─── SHA cache ────────────────────────────────────────────────────────────
@@ -454,6 +455,22 @@ export async function loadTimeline(): Promise<TimelineData> {
 export async function saveTimeline(data: TimelineData): Promise<void> {
   if (isDemoMode()) { demoSaveTimeline(data); return }
   await writeYaml(TIMELINE_PATH, data, 'Update linha do tempo')
+}
+
+// ─── Callout (recado geral) ───────────────────────────────────────────────
+
+const CALLOUT_PATH = 'shared/callout.yaml'
+const EMPTY_CALLOUT: CalloutData = { content: '', updated_at: '', updated_by: '' }
+
+export async function loadCallout(): Promise<CalloutData> {
+  if (isDemoMode()) return demoLoadCallout()
+  const data = await readYaml<CalloutData>(CALLOUT_PATH)
+  return data ?? EMPTY_CALLOUT
+}
+
+export async function saveCallout(data: CalloutData): Promise<void> {
+  if (isDemoMode()) { demoSaveCallout(data); return }
+  await writeYaml(CALLOUT_PATH, data, 'Update callout')
 }
 
 // ─── App config (users/app-config.yaml in data repo) ─────────────────────

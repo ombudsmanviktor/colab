@@ -3,17 +3,20 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd'
 import {
   Plus, GripVertical, Check, Trash2, Tag, Code2, Lock,
-  LayoutDashboard, Layers, CalendarDays, ChevronDown, ChevronUp,
+  LayoutDashboard, Layers, CalendarDays, ChevronDown, ChevronUp, Edit2, Megaphone,
 } from 'lucide-react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { useAuth } from '@/contexts/AuthContext'
-import { loadAllUserTasks, loadAllProfiles, saveUserTasks, loadUsersIndex, generateId } from '@/lib/storage'
+import { useTheme } from '@/contexts/ThemeContext'
+import { loadAllUserTasks, loadAllProfiles, saveUserTasks, loadUsersIndex, loadCallout, saveCallout, generateId } from '@/lib/storage'
 import { notifyTaskEvent } from '@/lib/emailjs'
 import { emailInitials, emailSlug, todayISO } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useToast } from '@/hooks/useToast'
 import { ToastContainer } from '@/components/ui/toast'
-import type { Task, UserTasks, UserProfile, UsersIndex } from '@/types'
+import type { Task, UserTasks, UserProfile, UsersIndex, CalloutData } from '@/types'
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
@@ -64,6 +67,98 @@ function datePillClass(dueDate: string | undefined, today: string): string {
 
 function addDays(n: number): string {
   return new Date(Date.now() + n * 86400000).toISOString().split('T')[0]
+}
+
+// ─── Callout Box ──────────────────────────────────────────────────────────
+
+function CalloutBox({ callout, onSave, userEmail }: {
+  callout: CalloutData
+  onSave: (c: CalloutData) => Promise<void>
+  userEmail: string
+}) {
+  const { isDark } = useTheme()
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(callout.content)
+  const [saving, setSaving] = useState(false)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => { if (editing) textareaRef.current?.focus() }, [editing])
+  useEffect(() => { if (!editing) setDraft(callout.content) }, [callout.content, editing])
+
+  async function handleSave() {
+    setSaving(true)
+    try {
+      await onSave({ content: draft.trim(), updated_at: new Date().toISOString(), updated_by: userEmail })
+      setEditing(false)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const hasContent = callout.content.trim().length > 0
+
+  // Collapsed: show a subtle single-line trigger
+  if (!hasContent && !editing) {
+    return (
+      <button
+        onClick={() => setEditing(true)}
+        className="flex items-center gap-1.5 text-xs text-gray-300 dark:text-gray-600 hover:text-amber-500 dark:hover:text-amber-400 transition-colors px-1 py-0.5 rounded w-fit"
+      >
+        <Megaphone className="w-3 h-3" />
+        Adicionar recado ao grupo
+      </button>
+    )
+  }
+
+  const bgLight = 'oklch(96.2% .059 95.617)'
+  const bgDark  = 'oklch(22% .04 90)'
+
+  return (
+    <div
+      style={{ background: isDark ? bgDark : bgLight }}
+      className="rounded-xl border border-amber-200 dark:border-amber-800/60 overflow-hidden"
+    >
+      {editing ? (
+        <div className="px-5 py-4 space-y-3">
+          <textarea
+            ref={textareaRef}
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            rows={3}
+            placeholder="Escreva um recado para o grupo… (suporta Markdown)"
+            className="w-full bg-white/70 dark:bg-gray-900/40 rounded-lg px-3 py-2 text-sm text-gray-800 dark:text-gray-200 outline-none border border-amber-200 dark:border-amber-700 resize-none placeholder:text-gray-400 focus:border-amber-400 transition-colors"
+          />
+          <div className="flex items-center justify-between">
+            {draft.trim() === '' && hasContent && (
+              <span className="text-xs text-gray-400">Salvar vazio irá remover o recado</span>
+            )}
+            <div className="flex gap-2 ml-auto">
+              <Button variant="outline" size="sm" onClick={() => { setDraft(callout.content); setEditing(false) }}>
+                Cancelar
+              </Button>
+              <Button size="sm" onClick={handleSave} disabled={saving} className="bg-amber-500 hover:bg-amber-600 text-white">
+                {saving ? 'Salvando…' : 'Salvar'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="px-5 py-3.5 flex items-start gap-3 group">
+          <Megaphone className="w-4 h-4 flex-shrink-0 text-amber-500 dark:text-amber-400 mt-0.5" />
+          <div className="flex-1 min-w-0 text-sm text-gray-800 dark:text-gray-100 prose prose-sm dark:prose-invert prose-p:my-0.5 prose-a:text-amber-700 dark:prose-a:text-amber-400 max-w-none">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{callout.content}</ReactMarkdown>
+          </div>
+          <button
+            onClick={() => setEditing(true)}
+            title="Editar recado"
+            className="flex-shrink-0 p-1.5 rounded opacity-0 group-hover:opacity-100 hover:bg-amber-100 dark:hover:bg-amber-900/40 text-amber-400 hover:text-amber-600 dark:hover:text-amber-300 transition-all"
+          >
+            <Edit2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+    </div>
+  )
 }
 
 // ─── Embed Dialog ─────────────────────────────────────────────────────────
@@ -785,6 +880,7 @@ export function VisaoGeral() {
   const [allTasks, setAllTasks] = useState<UserTasks[]>([])
   const [profiles, setProfiles] = useState<UserProfile[]>([])
   const [loading, setLoading] = useState(true)
+  const [callout, setCallout] = useState<CalloutData>({ content: '', updated_at: '', updated_by: '' })
 
   // Shared with Usuarios via TanStack Query cache — updates reactively when
   // a user is added or removed without requiring a page reload.
@@ -801,11 +897,13 @@ export function VisaoGeral() {
   useEffect(() => {
     async function load() {
       try {
-        const [idx, tasks, profs] = await Promise.all([
+        const [idx, tasks, profs, ct] = await Promise.all([
           loadUsersIndex(),
           loadAllUserTasks(),
           loadAllProfiles(),
+          loadCallout(),
         ])
+        setCallout(ct)
         // Populate the shared TanStack Query cache so Usuarios and VisaoGeral
         // stay in sync from the very first load.
         queryClient.setQueryData(['users-index'], idx)
@@ -941,6 +1039,16 @@ export function VisaoGeral() {
           </Button>
         </div>
       </div>
+
+      {/* Callout */}
+      <CalloutBox
+        callout={callout}
+        userEmail={session?.email ?? ''}
+        onSave={async (c) => {
+          await saveCallout(c)
+          setCallout(c)
+        }}
+      />
 
       {/* Content */}
       <div className="animate-fade-in">

@@ -176,6 +176,14 @@ export interface TimelineData {
   categories: TimelineCategory[]
 }
 
+// ─── Callout (recado geral) ───────────────────────────────────────────────
+
+export interface CalloutData {
+  content: string
+  updated_at: string
+  updated_by: string
+}
+
 // ─── Leituras Recomendadas ────────────────────────────────────────────────
 
 export interface Leitura {

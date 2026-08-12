@@ -1,6 +1,6 @@
 // ─── In-memory demo store ──────────────────────────────────────────────────
 
-import type { UsersIndex, UserTasks, UserProfile, OrdemDoDia, AtaDecisao, Leitura, Producao, SugestaoMessage, Orientacao, TarefaOrientacao, TimelineData, TimelineEvent, TimelineCategory } from '@/types'
+import type { UsersIndex, UserTasks, UserProfile, OrdemDoDia, AtaDecisao, Leitura, Producao, SugestaoMessage, Orientacao, TarefaOrientacao, TimelineData, TimelineEvent, TimelineCategory, CalloutData } from '@/types'
 
 export const DEMO_EMAIL = 'demo@colab.app'
 export const DEMO_EMAIL2 = 'ana@grupo.edu.br'
@@ -319,6 +319,8 @@ const DEMO_TIMELINE_EVENTS: TimelineEvent[] = [
   },
 ]
 
+const DEMO_CALLOUT: CalloutData = { content: '', updated_at: NOW, updated_by: '' }
+
 // ─── Mutable store ─────────────────────────────────────────────────────────
 
 interface DemoStore {
@@ -333,6 +335,7 @@ interface DemoStore {
   orientacoes: Orientacao[]
   tarefasOrientacao: TarefaOrientacao[]
   timeline: TimelineData
+  callout: CalloutData
 }
 
 function buildStore(): DemoStore {
@@ -348,6 +351,7 @@ function buildStore(): DemoStore {
     orientacoes: JSON.parse(JSON.stringify(DEMO_ORIENTACOES)),
     tarefasOrientacao: JSON.parse(JSON.stringify(DEMO_TAREFAS_ORIENTACAO)),
     timeline: JSON.parse(JSON.stringify({ events: DEMO_TIMELINE_EVENTS, categories: DEMO_TIMELINE_CATEGORIES })),
+    callout: JSON.parse(JSON.stringify(DEMO_CALLOUT)),
   }
 }
 
@@ -447,3 +451,6 @@ export function demoLoadTimeline(): TimelineData {
 export function demoSaveTimeline(data: TimelineData): void {
   _store.timeline = JSON.parse(JSON.stringify(data))
 }
+
+export function demoLoadCallout(): CalloutData { return JSON.parse(JSON.stringify(_store.callout)) }
+export function demoSaveCallout(c: CalloutData): void { _store.callout = JSON.parse(JSON.stringify(c)) }
