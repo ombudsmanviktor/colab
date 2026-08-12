@@ -324,7 +324,7 @@ export async function loadProducoes(): Promise<Producao[]> {
     )
     return results
       .filter((x): x is Producao => x !== null)
-      .sort((a, b) => b.meetingDate.localeCompare(a.meetingDate))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
   } catch {
     return []
   }

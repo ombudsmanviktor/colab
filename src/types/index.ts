@@ -219,10 +219,11 @@ export interface Leitura {
 export interface Producao {
   id: string
   title: string
-  authors: string[]
+  authors: string[]          // canonical ABNT: "Sobrenome, Prenome"
+  colabAuthors?: string[]    // subset of authors who are coLAB members
   year?: string
   source?: string
-  meetingDate: string
+  meetingDate?: string       // kept for backward compat, no longer shown
   pdfBase64?: string
   pdfName?: string
   url?: string

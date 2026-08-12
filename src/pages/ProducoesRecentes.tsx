@@ -1,13 +1,12 @@
 import { useState, useRef, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  BookMarked, Plus, Download, Trash2, Mail, Edit2, X, Upload, FileText,
+  BookMarked, Plus, Download, Trash2, Mail, Edit2, X, Upload, FileText, Users, Calendar,
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { loadProducoes, saveProducao, deleteProducao, loadUsersIndex, generateId } from '@/lib/storage'
 import { extractPdfMetadata } from '@/lib/pdfExtract'
 import { sendLeituraNotification } from '@/lib/emailjs'
-import { formatDate } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -17,13 +16,155 @@ import { ToastContainer } from '@/components/ui/toast'
 import { useFileDrop } from '@/hooks/useFileDrop'
 import type { Producao } from '@/types'
 
-// ─── Bibliography formatter ────────────────────────────────────────────────
+// ─── Name normalization ────────────────────────────────────────────────────
+// All names are stored internally in ABNT format: "Sobrenome, Prenome"
+
+function toAbntName(raw: string): string {
+  const s = raw.trim()
+  if (!s) return s
+  if (s.includes(',')) {
+    const [last, ...rest] = s.split(',')
+    return `${last.trim()}, ${rest.join(',').trim()}`
+  }
+  const parts = s.split(/\s+/)
+  if (parts.length === 1) return parts[0]
+  const last = parts[parts.length - 1]
+  const first = parts.slice(0, -1).join(' ')
+  return `${last}, ${first}`
+}
+
+function toDisplayName(abnt: string): string {
+  if (!abnt.includes(',')) return abnt
+  const comma = abnt.indexOf(',')
+  const last = abnt.slice(0, comma).trim()
+  const first = abnt.slice(comma + 1).trim()
+  return first ? `${first} ${last}` : last
+}
+
+function parseRawAuthors(raw: string): string[] {
+  return raw.split(';').map(a => toAbntName(a)).filter(Boolean)
+}
+
+// ─── Author pills ──────────────────────────────────────────────────────────
+
+function AuthorPillToggle({
+  abnt, isColab, onToggle,
+}: { abnt: string; isColab: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      title={isColab ? 'Membro do coLAB · clique para desmarcar' : 'Externo · clique para marcar como membro do coLAB'}
+      className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-all ${
+        isColab
+          ? 'bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-300 ring-1 ring-amber-300 dark:ring-amber-700'
+          : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+      }`}
+    >
+      {isColab && <span className="text-amber-500 text-[10px]">◆</span>}
+      {toDisplayName(abnt)}
+    </button>
+  )
+}
+
+function AuthorPillDisplay({
+  abnt, isColab,
+}: { abnt: string; isColab: boolean }) {
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+      isColab
+        ? 'bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 ring-1 ring-amber-200 dark:ring-amber-800'
+        : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
+    }`}>
+      {isColab && <span className="text-amber-400 text-[9px]">◆</span>}
+      {toDisplayName(abnt)}
+    </span>
+  )
+}
+
+// Combined author input + pill preview with coLAB toggle
+function AuthorsInput({
+  raw, colabSet, onChange, onToggleColab,
+}: {
+  raw: string
+  colabSet: Set<string>
+  onChange: (v: string) => void
+  onToggleColab: (abnt: string) => void
+}) {
+  const parsed = parseRawAuthors(raw)
+  return (
+    <div className="space-y-2">
+      <Input
+        value={raw}
+        onChange={e => onChange(e.target.value)}
+        placeholder="Prenome Sobrenome; Sobrenome, Prenome2; …"
+      />
+      {parsed.length > 0 && (
+        <div>
+          <p className="text-[11px] text-gray-400 dark:text-gray-500 mb-1.5">
+            Clique para marcar/desmarcar como membro do coLAB <span className="text-amber-500">◆</span>
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {parsed.map((abnt, i) => (
+              <AuthorPillToggle
+                key={i}
+                abnt={abnt}
+                isColab={colabSet.has(abnt)}
+                onToggle={() => onToggleColab(abnt)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Grouping ──────────────────────────────────────────────────────────────
+
+type GroupMode = 'author' | 'year'
+
+function groupByAuthor(producoes: Producao[]): Map<string, { displayName: string; entries: Producao[] }> {
+  const map = new Map<string, { displayName: string; entries: Producao[] }>()
+  for (const p of producoes) {
+    for (const a of p.authors) {
+      if (!map.has(a)) map.set(a, { displayName: toDisplayName(a), entries: [] })
+      map.get(a)!.entries.push(p)
+    }
+  }
+  return new Map(
+    [...map.entries()].sort((a, b) =>
+      a[1].displayName.localeCompare(b[1].displayName, 'pt-BR', { sensitivity: 'base' })
+    )
+  )
+}
+
+function groupByYear(producoes: Producao[]): Map<string, Producao[]> {
+  const map = new Map<string, Producao[]>()
+  for (const p of producoes) {
+    const y = p.year ?? 'Sem ano'
+    if (!map.has(y)) map.set(y, [])
+    map.get(y)!.push(p)
+  }
+  return new Map(
+    [...map.entries()].sort((a, b) => {
+      if (a[0] === 'Sem ano') return 1
+      if (b[0] === 'Sem ano') return -1
+      return b[0].localeCompare(a[0])
+    })
+  )
+}
+
+// ─── Bibliography formatters ───────────────────────────────────────────────
 
 function formatABNT(p: Producao): string {
-  const authors = p.authors.map(a => {
-    const parts = a.split(',')
-    return parts.length >= 2 ? `${parts[0].trim().toUpperCase()}, ${parts[1].trim()}` : a.toUpperCase()
-  }).join('; ')
+  const authors = p.authors
+    .map(a => {
+      if (!a.includes(',')) return a.toUpperCase()
+      const [last, ...rest] = a.split(',')
+      return `${last.trim().toUpperCase()}, ${rest.join(',').trim()}`
+    })
+    .join('; ')
   const year = p.year ? `. ${p.year}` : ''
   const source = p.source ? `. *${p.source}*` : ''
   return `${authors}${year}. **${p.title}**${source}.`
@@ -39,10 +180,10 @@ function formatBibText(p: Producao): string {
 // ─── Export ───────────────────────────────────────────────────────────────
 
 function exportMarkdown(producoes: Producao[]) {
-  const grouped = groupByDate(producoes)
+  const byYear = groupByYear(producoes)
   const lines = ['# Produções Recentes\n']
-  for (const [date, items] of Object.entries(grouped)) {
-    lines.push(`## Reunião: ${formatDate(date)}\n`)
+  for (const [year, items] of byYear.entries()) {
+    lines.push(`## ${year}\n`)
     for (const p of items) lines.push(`- ${formatABNT(p)}`)
     lines.push('')
   }
@@ -65,10 +206,10 @@ async function exportPDF(producoes: Producao[]) {
   pdf.text('coLAB · coLAB/UFF · Produções Recentes', ml, 8)
   y = 24
 
-  const grouped = groupByDate(producoes)
-  for (const [date, items] of Object.entries(grouped)) {
+  const byYear = groupByYear(producoes)
+  for (const [year, items] of byYear.entries()) {
     pdf.setFontSize(12); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(120, 53, 15)
-    pdf.text(`Reunião: ${formatDate(date)}`, ml, y); y += 8
+    pdf.text(year, ml, y); y += 8
     for (const p of items) {
       const text = formatBibText(p)
       pdf.setFontSize(10); pdf.setFont('helvetica', 'normal'); pdf.setTextColor(31, 41, 55)
@@ -87,9 +228,9 @@ async function exportPDF(producoes: Producao[]) {
 async function exportDOCX(producoes: Producao[]) {
   const { Document, Paragraph, HeadingLevel, Packer, TextRun } = await import('docx')
   const children = []
-  const grouped = groupByDate(producoes)
-  for (const [date, items] of Object.entries(grouped)) {
-    children.push(new Paragraph({ text: `Reunião: ${formatDate(date)}`, heading: HeadingLevel.HEADING_2 }))
+  const byYear = groupByYear(producoes)
+  for (const [year, items] of byYear.entries()) {
+    children.push(new Paragraph({ text: year, heading: HeadingLevel.HEADING_2 }))
     for (const p of items) {
       children.push(new Paragraph({ children: [new TextRun(formatBibText(p))] }))
     }
@@ -108,24 +249,15 @@ async function exportXLS(producoes: Producao[]) {
   const rows = producoes.map(p => ({
     'Título': p.title,
     'Autores': p.authors.join('; '),
+    'Membros coLAB': (p.colabAuthors ?? []).join('; '),
     'Ano': p.year ?? '',
     'Fonte': p.source ?? '',
-    'Reunião': p.meetingDate,
     'Adicionado por': p.addedBy,
   }))
   const ws = utils.json_to_sheet(rows)
   const wb = utils.book_new()
   utils.book_append_sheet(wb, ws, 'Produções')
   writeFile(wb, 'producoes.xlsx')
-}
-
-function groupByDate(producoes: Producao[]): Record<string, Producao[]> {
-  const sorted = [...producoes].sort((a, b) => b.meetingDate.localeCompare(a.meetingDate))
-  return sorted.reduce<Record<string, Producao[]>>((acc, p) => {
-    if (!acc[p.meetingDate]) acc[p.meetingDate] = []
-    acc[p.meetingDate].push(p)
-    return acc
-  }, {})
 }
 
 // ─── Upload Dialog ─────────────────────────────────────────────────────────
@@ -138,10 +270,10 @@ function UploadDialog({
 }) {
   const { session } = useAuth()
   const [title, setTitle] = useState('')
-  const [authors, setAuthors] = useState('')
+  const [authorsRaw, setAuthorsRaw] = useState('')
+  const [colabSet, setColabSet] = useState<Set<string>>(new Set())
   const [year, setYear] = useState('')
   const [source, setSource] = useState('')
-  const [meetingDate, setMeetingDate] = useState('')
   const [notes, setNotes] = useState('')
   const [url, setUrl] = useState('')
   const [pdfBase64, setPdfBase64] = useState<string | undefined>()
@@ -152,11 +284,19 @@ function UploadDialog({
   const didProcess = useRef(false)
 
   function reset() {
-    setTitle(''); setAuthors(''); setYear(''); setSource('')
-    setMeetingDate(''); setNotes(''); setUrl('')
+    setTitle(''); setAuthorsRaw(''); setColabSet(new Set()); setYear(''); setSource('')
+    setNotes(''); setUrl('')
     setPdfBase64(undefined); setPdfName(undefined)
     setLoading(false); setSaving(false)
     didProcess.current = false
+  }
+
+  function toggleColab(abnt: string) {
+    setColabSet(prev => {
+      const next = new Set(prev)
+      next.has(abnt) ? next.delete(abnt) : next.add(abnt)
+      return next
+    })
   }
 
   async function processFile(file: File) {
@@ -166,14 +306,14 @@ function UploadDialog({
       const buffer = await file.arrayBuffer()
       const meta = await extractPdfMetadata(buffer)
       if (meta.title) setTitle(meta.title)
-      if (meta.authors?.length) setAuthors(meta.authors.join('; '))
+      if (meta.authors?.length) setAuthorsRaw(meta.authors.join('; '))
       if (meta.year) setYear(meta.year)
       if (meta.source) setSource(meta.source)
       const bytes = new Uint8Array(buffer)
       const binStr = Array.from(bytes, b => String.fromCodePoint(b)).join('')
       setPdfBase64(btoa(binStr))
     } catch {
-      // metadata extraction failed — fields remain empty for manual fill
+      // metadata extraction failed
     } finally {
       setLoading(false)
     }
@@ -192,17 +332,20 @@ function UploadDialog({
     if (file) processFile(file)
   }
 
+  const parsedAuthors = parseRawAuthors(authorsRaw)
+  const canSave = title.trim() && parsedAuthors.length > 0
+
   async function handleSave() {
-    if (!title.trim() || !meetingDate) return
+    if (!canSave) return
     setSaving(true)
     const now = new Date().toISOString()
     const producao: Producao = {
       id: generateId(),
       title: title.trim(),
-      authors: authors.split(';').map(a => a.trim()).filter(Boolean),
+      authors: parsedAuthors,
+      colabAuthors: parsedAuthors.filter(a => colabSet.has(a)),
       year: year.trim() || undefined,
       source: source.trim() || undefined,
-      meetingDate,
       notes: notes.trim() || undefined,
       url: url.trim() || undefined,
       pdfBase64,
@@ -257,8 +400,16 @@ function UploadDialog({
           </div>
 
           <div className="space-y-1.5">
-            <Label>Autores (separados por ;)</Label>
-            <Input value={authors} onChange={e => setAuthors(e.target.value)} placeholder="Sobrenome, Nome; Sobrenome2, Nome2" />
+            <Label>
+              Autores <span className="text-red-400">*</span>
+              <span className="ml-2 text-xs font-normal text-gray-400">separados por ponto e vírgula</span>
+            </Label>
+            <AuthorsInput
+              raw={authorsRaw}
+              colabSet={colabSet}
+              onChange={setAuthorsRaw}
+              onToggleColab={toggleColab}
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -267,14 +418,9 @@ function UploadDialog({
               <Input value={year} onChange={e => setYear(e.target.value)} placeholder="2024" />
             </div>
             <div className="space-y-1.5">
-              <Label>Data da reunião <span className="text-red-400">*</span></Label>
-              <Input type="date" value={meetingDate} onChange={e => setMeetingDate(e.target.value)} />
+              <Label>Periódico / Livro</Label>
+              <Input value={source} onChange={e => setSource(e.target.value)} placeholder="Revista, editora…" />
             </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label>Periódico / Livro</Label>
-            <Input value={source} onChange={e => setSource(e.target.value)} placeholder="Nome da revista, editora, etc." />
           </div>
 
           <div className="space-y-1.5">
@@ -292,7 +438,7 @@ function UploadDialog({
           <Button variant="outline" onClick={() => { reset(); onClose() }}>Cancelar</Button>
           <Button
             onClick={handleSave}
-            disabled={saving || loading || !title.trim() || !meetingDate}
+            disabled={saving || loading || !canSave}
             className="bg-amber-500 hover:bg-amber-600 text-white"
           >
             {saving ? 'Salvando…' : 'Adicionar'}
@@ -309,24 +455,35 @@ function EditDialog({ producao, onClose, onSave }: {
   producao: Producao; onClose: () => void; onSave: (p: Producao) => Promise<void>
 }) {
   const [title, setTitle] = useState(producao.title)
-  const [authors, setAuthors] = useState(producao.authors.join('; '))
+  const [authorsRaw, setAuthorsRaw] = useState(producao.authors.join('; '))
+  const [colabSet, setColabSet] = useState<Set<string>>(new Set(producao.colabAuthors ?? []))
   const [year, setYear] = useState(producao.year ?? '')
   const [source, setSource] = useState(producao.source ?? '')
-  const [meetingDate, setMeetingDate] = useState(producao.meetingDate)
   const [notes, setNotes] = useState(producao.notes ?? '')
   const [url, setUrl] = useState(producao.url ?? '')
   const [saving, setSaving] = useState(false)
 
+  function toggleColab(abnt: string) {
+    setColabSet(prev => {
+      const next = new Set(prev)
+      next.has(abnt) ? next.delete(abnt) : next.add(abnt)
+      return next
+    })
+  }
+
+  const parsedAuthors = parseRawAuthors(authorsRaw)
+  const canSave = title.trim() && parsedAuthors.length > 0
+
   async function handleSave() {
-    if (!title.trim() || !meetingDate) return
+    if (!canSave) return
     setSaving(true)
     await onSave({
       ...producao,
       title: title.trim(),
-      authors: authors.split(';').map(a => a.trim()).filter(Boolean),
+      authors: parsedAuthors,
+      colabAuthors: parsedAuthors.filter(a => colabSet.has(a)),
       year: year.trim() || undefined,
       source: source.trim() || undefined,
-      meetingDate,
       notes: notes.trim() || undefined,
       url: url.trim() || undefined,
     })
@@ -336,16 +493,24 @@ function EditDialog({ producao, onClose, onSave }: {
 
   return (
     <Dialog open onOpenChange={(v) => { if (!v) onClose() }}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle>Editar Produção</DialogTitle></DialogHeader>
         <div className="space-y-4">
           <div className="space-y-1.5">
-            <Label>Título</Label>
+            <Label>Título <span className="text-red-400">*</span></Label>
             <Input value={title} onChange={e => setTitle(e.target.value)} />
           </div>
           <div className="space-y-1.5">
-            <Label>Autores (separados por ;)</Label>
-            <Input value={authors} onChange={e => setAuthors(e.target.value)} />
+            <Label>
+              Autores <span className="text-red-400">*</span>
+              <span className="ml-2 text-xs font-normal text-gray-400">separados por ponto e vírgula</span>
+            </Label>
+            <AuthorsInput
+              raw={authorsRaw}
+              colabSet={colabSet}
+              onChange={setAuthorsRaw}
+              onToggleColab={toggleColab}
+            />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
@@ -353,13 +518,9 @@ function EditDialog({ producao, onClose, onSave }: {
               <Input value={year} onChange={e => setYear(e.target.value)} />
             </div>
             <div className="space-y-1.5">
-              <Label>Data da reunião</Label>
-              <Input type="date" value={meetingDate} onChange={e => setMeetingDate(e.target.value)} />
+              <Label>Periódico / Livro</Label>
+              <Input value={source} onChange={e => setSource(e.target.value)} />
             </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Periódico / Livro</Label>
-            <Input value={source} onChange={e => setSource(e.target.value)} />
           </div>
           <div className="space-y-1.5">
             <Label>URL</Label>
@@ -372,7 +533,7 @@ function EditDialog({ producao, onClose, onSave }: {
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={handleSave} disabled={saving} className="bg-amber-500 hover:bg-amber-600 text-white">
+          <Button onClick={handleSave} disabled={saving || !canSave} className="bg-amber-500 hover:bg-amber-600 text-white">
             {saving ? 'Salvando…' : 'Atualizar'}
           </Button>
         </DialogFooter>
@@ -386,6 +547,8 @@ function EditDialog({ producao, onClose, onSave }: {
 function ProducaoCard({ p, onDelete, onEdit, onEmail }: {
   p: Producao; onDelete: () => void; onEdit: () => void; onEmail: () => void
 }) {
+  const colabSet = new Set(p.colabAuthors ?? [])
+
   function downloadPdf() {
     if (!p.pdfBase64 || !p.pdfName) return
     const binStr = atob(p.pdfBase64)
@@ -401,12 +564,25 @@ function ProducaoCard({ p, onDelete, onEdit, onEmail }: {
   return (
     <div className="group bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-3 flex items-start justify-between gap-3 hover:shadow-sm transition-shadow">
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold text-gray-900 dark:text-white">{p.title}</p>
+        <p className="text-sm font-semibold text-gray-900 dark:text-white leading-snug">{p.title}</p>
+
+        {/* Author pills */}
         {p.authors.length > 0 && (
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{p.authors.join('; ')}{p.year ? ` (${p.year})` : ''}</p>
+          <div className="flex flex-wrap gap-1 mt-1.5">
+            {p.authors.map((a, i) => (
+              <AuthorPillDisplay key={i} abnt={a} isColab={colabSet.has(a)} />
+            ))}
+            {p.year && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-gray-700/50 text-gray-400 dark:text-gray-500 ring-1 ring-gray-200 dark:ring-gray-600">
+                {p.year}
+              </span>
+            )}
+          </div>
         )}
-        {p.source && <p className="text-xs text-gray-400 dark:text-gray-500 italic mt-0.5">{p.source}</p>}
+
+        {p.source && <p className="text-xs text-gray-400 dark:text-gray-500 italic mt-1">{p.source}</p>}
         {p.notes && <p className="text-xs text-gray-400 mt-1">{p.notes}</p>}
+
         <div className="flex items-center gap-2 mt-1.5">
           {p.url && (
             <a href={p.url} target="_blank" rel="noreferrer" className="text-xs text-amber-600 hover:underline">Link</a>
@@ -416,17 +592,17 @@ function ProducaoCard({ p, onDelete, onEdit, onEmail }: {
               <FileText className="w-3 h-3" /> PDF
             </button>
           )}
-          <span className="text-xs text-gray-300">por {p.addedBy}</span>
+          <span className="text-xs text-gray-300 dark:text-gray-600">por {p.addedBy}</span>
         </div>
       </div>
       <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-        <button onClick={onEdit} title="Editar" className="p-1.5 rounded hover:bg-amber-50 text-gray-300 hover:text-amber-500 transition-colors">
+        <button onClick={onEdit} title="Editar" className="p-1.5 rounded hover:bg-amber-50 dark:hover:bg-amber-900/30 text-gray-300 hover:text-amber-500 transition-colors">
           <Edit2 className="w-3.5 h-3.5" />
         </button>
-        <button onClick={onEmail} title="Enviar por email" className="p-1.5 rounded hover:bg-blue-50 text-gray-300 hover:text-blue-500 transition-colors">
+        <button onClick={onEmail} title="Enviar por email" className="p-1.5 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 text-gray-300 hover:text-blue-500 transition-colors">
           <Mail className="w-3.5 h-3.5" />
         </button>
-        <button onClick={onDelete} title="Remover" className="p-1.5 rounded hover:bg-red-50 text-gray-300 hover:text-red-400 transition-colors">
+        <button onClick={onDelete} title="Remover" className="p-1.5 rounded hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-300 hover:text-red-400 transition-colors">
           <Trash2 className="w-3.5 h-3.5" />
         </button>
       </div>
@@ -445,8 +621,8 @@ export function ProducoesRecentes() {
   const [editProducao, setEditProducao] = useState<Producao | null>(null)
   const [exportOpen, setExportOpen] = useState(false)
   const exportRef = useRef<HTMLDivElement>(null)
-  const [filterStart, setFilterStart] = useState('')
-  const [filterEnd, setFilterEnd] = useState('')
+  const [groupMode, setGroupMode] = useState<GroupMode>('year')
+  const [search, setSearch] = useState('')
 
   const isDragging = useFileDrop((file) => {
     setDropFile(file)
@@ -458,13 +634,26 @@ export function ProducoesRecentes() {
     queryFn: loadProducoes,
   })
 
-  const filteredProducoes = producoes.filter(p => {
-    if (filterStart && p.meetingDate < filterStart) return false
-    if (filterEnd && p.meetingDate > filterEnd) return false
-    return true
-  })
+  // Close export dropdown when clicking outside
+  useEffect(() => {
+    if (!exportOpen) return
+    function onClickOut(e: MouseEvent) {
+      if (exportRef.current && !exportRef.current.contains(e.target as Node)) setExportOpen(false)
+    }
+    document.addEventListener('mousedown', onClickOut)
+    return () => document.removeEventListener('mousedown', onClickOut)
+  }, [exportOpen])
 
-  const grouped = groupByDate(filteredProducoes)
+  const filtered = producoes.filter(p => {
+    if (!search.trim()) return true
+    const q = search.toLowerCase()
+    return (
+      p.title.toLowerCase().includes(q) ||
+      p.authors.some(a => toDisplayName(a).toLowerCase().includes(q) || a.toLowerCase().includes(q)) ||
+      (p.year ?? '').includes(q) ||
+      (p.source ?? '').toLowerCase().includes(q)
+    )
+  })
 
   async function handleSave(p: Producao) {
     await saveProducao(p)
@@ -492,7 +681,7 @@ export function ProducoesRecentes() {
         leituraAuthors: p.authors.join('; '),
         leituraYear: p.year,
         leituraSource: p.source,
-        meetingDate: p.meetingDate,
+        meetingDate: '',
       })
       toast({ title: 'Notificação enviada' })
     } catch (err) {
@@ -506,8 +695,12 @@ export function ProducoesRecentes() {
     </div>
   )
 
+  const byAuthor = groupByAuthor(filtered)
+  const byYear = groupByYear(filtered)
+
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold text-gray-900 dark:text-white">Produções Recentes</h1>
@@ -522,10 +715,10 @@ export function ProducoesRecentes() {
               {exportOpen && (
                 <div className="absolute right-0 top-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-30 py-1 min-w-[150px]">
                   {[
-                    { label: 'Markdown', fn: () => exportMarkdown(filteredProducoes) },
-                    { label: 'PDF', fn: () => exportPDF(filteredProducoes) },
-                    { label: 'Word (DOCX)', fn: () => exportDOCX(filteredProducoes) },
-                    { label: 'Excel (XLS)', fn: () => exportXLS(filteredProducoes) },
+                    { label: 'Markdown', fn: () => exportMarkdown(filtered) },
+                    { label: 'PDF', fn: () => exportPDF(filtered) },
+                    { label: 'Word (DOCX)', fn: () => exportDOCX(filtered) },
+                    { label: 'Excel (XLS)', fn: () => exportXLS(filtered) },
                   ].map(({ label, fn }) => (
                     <button key={label} onClick={() => { fn(); setExportOpen(false) }}
                       className="w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 text-left transition-colors">
@@ -542,21 +735,48 @@ export function ProducoesRecentes() {
         </div>
       </div>
 
-      {/* Filter */}
+      {/* Toolbar: search + group toggle */}
       {producoes.length > 0 && (
         <div className="flex items-center gap-3 flex-wrap">
-          <span className="text-sm text-gray-500">Período:</span>
-          <Input type="date" value={filterStart} onChange={e => setFilterStart(e.target.value)} className="w-auto text-sm" />
-          <span className="text-gray-400">—</span>
-          <Input type="date" value={filterEnd} onChange={e => setFilterEnd(e.target.value)} className="w-auto text-sm" />
-          {(filterStart || filterEnd) && (
-            <button onClick={() => { setFilterStart(''); setFilterEnd('') }} className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1">
+          <div className="flex-1 min-w-[200px]">
+            <Input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Buscar por título, autor, ano…"
+              className="text-sm"
+            />
+          </div>
+          {search && (
+            <button onClick={() => setSearch('')} className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1">
               <X className="w-3 h-3" /> Limpar
             </button>
           )}
+          <div className="flex items-center gap-1 rounded-lg border border-gray-200 dark:border-gray-700 p-0.5 bg-gray-50 dark:bg-gray-800">
+            <button
+              onClick={() => setGroupMode('year')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                groupMode === 'year'
+                  ? 'bg-white dark:bg-gray-700 text-amber-600 dark:text-amber-400 shadow-sm'
+                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+              }`}
+            >
+              <Calendar className="w-3.5 h-3.5" /> Por ano
+            </button>
+            <button
+              onClick={() => setGroupMode('author')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                groupMode === 'author'
+                  ? 'bg-white dark:bg-gray-700 text-amber-600 dark:text-amber-400 shadow-sm'
+                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+              }`}
+            >
+              <Users className="w-3.5 h-3.5" /> Por autor
+            </button>
+          </div>
         </div>
       )}
 
+      {/* Empty state */}
       {producoes.length === 0 ? (
         <div className="text-center py-16">
           <BookMarked className="w-10 h-10 text-gray-200 dark:text-gray-700 mx-auto mb-3" />
@@ -565,16 +785,17 @@ export function ProducoesRecentes() {
             <Plus className="w-4 h-4" /> Adicionar primeira produção
           </Button>
         </div>
-      ) : filteredProducoes.length === 0 ? (
-        <div className="text-center py-10 text-gray-400">Nenhuma produção neste período.</div>
-      ) : (
+      ) : filtered.length === 0 ? (
+        <div className="text-center py-10 text-gray-400">Nenhuma produção encontrada.</div>
+      ) : groupMode === 'year' ? (
+        /* ─── Por ano ─── */
         <div className="space-y-6">
-          {Object.entries(grouped).map(([date, items]) => (
-            <div key={date}>
+          {[...byYear.entries()].map(([year, items]) => (
+            <div key={year}>
               <div className="flex items-center gap-2 mb-3">
                 <div className="h-px flex-1 bg-amber-100 dark:bg-amber-900/30" />
                 <span className="text-xs font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wide px-2">
-                  Reunião · {formatDate(date)}
+                  {year}
                 </span>
                 <div className="h-px flex-1 bg-amber-100 dark:bg-amber-900/30" />
               </div>
@@ -582,6 +803,35 @@ export function ProducoesRecentes() {
                 {items.map(p => (
                   <ProducaoCard
                     key={p.id} p={p}
+                    onDelete={() => handleDelete(p.id)}
+                    onEdit={() => setEditProducao(p)}
+                    onEmail={() => handleEmail(p)}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        /* ─── Por autor ─── */
+        <div className="space-y-6">
+          {[...byAuthor.entries()].map(([abnt, { displayName, entries }]) => (
+            <div key={abnt}>
+              <div className="flex items-center gap-2 mb-3">
+                <div className="h-px flex-1 bg-amber-100 dark:bg-amber-900/30" />
+                <span className="text-xs font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wide px-2 flex items-center gap-1.5">
+                  {/* Show diamond if this person is a coLAB member in any entry */}
+                  {entries.some(e => (e.colabAuthors ?? []).includes(abnt)) && (
+                    <span className="text-amber-400 normal-case text-[10px]">◆</span>
+                  )}
+                  {displayName}
+                </span>
+                <div className="h-px flex-1 bg-amber-100 dark:bg-amber-900/30" />
+              </div>
+              <div className="space-y-2">
+                {entries.map(p => (
+                  <ProducaoCard
+                    key={`${abnt}-${p.id}`} p={p}
                     onDelete={() => handleDelete(p.id)}
                     onEdit={() => setEditProducao(p)}
                     onEmail={() => handleEmail(p)}
