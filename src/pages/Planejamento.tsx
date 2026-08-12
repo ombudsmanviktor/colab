@@ -265,7 +265,7 @@ function ReadingForm({ onAdd, onClose }: { onAdd: (r: PlanReading) => void; onCl
 // ─── Meeting card ─────────────────────────────────────────────────────────
 
 function MeetingCard({
-  meeting, readings, provided, onDescChange, onRemoveReading, onDeleteMeeting,
+  meeting, readings, provided, onDescChange, onRemoveReading, onDeleteMeeting, onFileDrop, isProcessing,
 }: {
   meeting: PlannedMeeting
   readings: PlanReading[]
