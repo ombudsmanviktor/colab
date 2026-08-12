@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   BookMarked, Plus, Download, Trash2, Mail, Edit2, X, Upload, FileText, Users, Calendar,
@@ -17,7 +17,6 @@ import { useFileDrop } from '@/hooks/useFileDrop'
 import type { Producao } from '@/types'
 
 // ─── Name normalization ────────────────────────────────────────────────────
-// All names are stored internally in ABNT format: "Sobrenome, Prenome"
 
 function toAbntName(raw: string): string {
   const s = raw.trim()
@@ -45,11 +44,11 @@ function parseRawAuthors(raw: string): string[] {
   return raw.split(';').map(a => toAbntName(a)).filter(Boolean)
 }
 
-// ─── Author pills ──────────────────────────────────────────────────────────
+// ─── Author pill components ────────────────────────────────────────────────
 
-function AuthorPillToggle({
-  abnt, isColab, onToggle,
-}: { abnt: string; isColab: boolean; onToggle: () => void }) {
+function AuthorPillToggle({ abnt, isColab, onToggle }: {
+  abnt: string; isColab: boolean; onToggle: () => void
+}) {
   return (
     <button
       type="button"
@@ -67,9 +66,7 @@ function AuthorPillToggle({
   )
 }
 
-function AuthorPillDisplay({
-  abnt, isColab,
-}: { abnt: string; isColab: boolean }) {
+function AuthorPillDisplay({ abnt, isColab }: { abnt: string; isColab: boolean }) {
   return (
     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
       isColab
@@ -82,14 +79,9 @@ function AuthorPillDisplay({
   )
 }
 
-// Combined author input + pill preview with coLAB toggle
-function AuthorsInput({
-  raw, colabSet, onChange, onToggleColab,
-}: {
-  raw: string
-  colabSet: Set<string>
-  onChange: (v: string) => void
-  onToggleColab: (abnt: string) => void
+function AuthorsInput({ raw, colabSet, onChange, onToggleColab }: {
+  raw: string; colabSet: Set<string>
+  onChange: (v: string) => void; onToggleColab: (abnt: string) => void
 }) {
   const parsed = parseRawAuthors(raw)
   return (
@@ -107,8 +99,7 @@ function AuthorsInput({
           <div className="flex flex-wrap gap-1.5">
             {parsed.map((abnt, i) => (
               <AuthorPillToggle
-                key={i}
-                abnt={abnt}
+                key={i} abnt={abnt}
                 isColab={colabSet.has(abnt)}
                 onToggle={() => onToggleColab(abnt)}
               />
@@ -120,28 +111,13 @@ function AuthorsInput({
   )
 }
 
-// ─── Grouping ──────────────────────────────────────────────────────────────
+// ─── Grouping helpers ──────────────────────────────────────────────────────
 
-type GroupMode = 'author' | 'year'
+type GroupMode = 'year' | 'author'
 
-function groupByAuthor(producoes: Producao[]): Map<string, { displayName: string; entries: Producao[] }> {
-  const map = new Map<string, { displayName: string; entries: Producao[] }>()
-  for (const p of producoes) {
-    for (const a of p.authors) {
-      if (!map.has(a)) map.set(a, { displayName: toDisplayName(a), entries: [] })
-      map.get(a)!.entries.push(p)
-    }
-  }
-  return new Map(
-    [...map.entries()].sort((a, b) =>
-      a[1].displayName.localeCompare(b[1].displayName, 'pt-BR', { sensitivity: 'base' })
-    )
-  )
-}
-
-function groupByYear(producoes: Producao[]): Map<string, Producao[]> {
+function groupByYear(list: Producao[]): Map<string, Producao[]> {
   const map = new Map<string, Producao[]>()
-  for (const p of producoes) {
+  for (const p of list) {
     const y = p.year ?? 'Sem ano'
     if (!map.has(y)) map.set(y, [])
     map.get(y)!.push(p)
@@ -155,16 +131,40 @@ function groupByYear(producoes: Producao[]): Map<string, Producao[]> {
   )
 }
 
+// Groups by coLAB authors only (colabAuthors field)
+function groupByColabAuthor(list: Producao[]): Map<string, Producao[]> {
+  const map = new Map<string, Producao[]>()
+  for (const p of list) {
+    const colab = p.colabAuthors ?? []
+    if (colab.length === 0) {
+      // entries without coLAB authors go to a catch-all bucket
+      const key = '__none__'
+      if (!map.has(key)) map.set(key, [])
+      map.get(key)!.push(p)
+    } else {
+      for (const a of colab) {
+        if (!map.has(a)) map.set(a, [])
+        map.get(a)!.push(p)
+      }
+    }
+  }
+  // Sort by display name, keeping __none__ at end
+  const sorted = [...map.entries()].sort((a, b) => {
+    if (a[0] === '__none__') return 1
+    if (b[0] === '__none__') return -1
+    return toDisplayName(a[0]).localeCompare(toDisplayName(b[0]), 'pt-BR', { sensitivity: 'base' })
+  })
+  return new Map(sorted)
+}
+
 // ─── Bibliography formatters ───────────────────────────────────────────────
 
 function formatABNT(p: Producao): string {
-  const authors = p.authors
-    .map(a => {
-      if (!a.includes(',')) return a.toUpperCase()
-      const [last, ...rest] = a.split(',')
-      return `${last.trim().toUpperCase()}, ${rest.join(',').trim()}`
-    })
-    .join('; ')
+  const authors = p.authors.map(a => {
+    if (!a.includes(',')) return a.toUpperCase()
+    const [last, ...rest] = a.split(',')
+    return `${last.trim().toUpperCase()}, ${rest.join(',').trim()}`
+  }).join('; ')
   const year = p.year ? `. ${p.year}` : ''
   const source = p.source ? `. *${p.source}*` : ''
   return `${authors}${year}. **${p.title}**${source}.`
@@ -179,8 +179,8 @@ function formatBibText(p: Producao): string {
 
 // ─── Export ───────────────────────────────────────────────────────────────
 
-function exportMarkdown(producoes: Producao[]) {
-  const byYear = groupByYear(producoes)
+function exportMarkdown(list: Producao[]) {
+  const byYear = groupByYear(list)
   const lines = ['# Produções Recentes\n']
   for (const [year, items] of byYear.entries()) {
     lines.push(`## ${year}\n`)
@@ -194,20 +194,16 @@ function exportMarkdown(producoes: Producao[]) {
   URL.revokeObjectURL(url)
 }
 
-async function exportPDF(producoes: Producao[]) {
+async function exportPDF(list: Producao[]) {
   const { jsPDF } = await import('jspdf')
   const pdf = new jsPDF({ orientation: 'portrait', format: 'a4', unit: 'mm' })
   const ml = 20, pageW = pdf.internal.pageSize.getWidth()
-  let y = 20
-
+  let y = 24
   pdf.setFillColor(217, 119, 6)
   pdf.rect(0, 0, pageW, 12, 'F')
   pdf.setTextColor(255, 255, 255); pdf.setFontSize(8); pdf.setFont('helvetica', 'normal')
   pdf.text('coLAB · coLAB/UFF · Produções Recentes', ml, 8)
-  y = 24
-
-  const byYear = groupByYear(producoes)
-  for (const [year, items] of byYear.entries()) {
+  for (const [year, items] of groupByYear(list).entries()) {
     pdf.setFontSize(12); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(120, 53, 15)
     pdf.text(year, ml, y); y += 8
     for (const p of items) {
@@ -225,15 +221,12 @@ async function exportPDF(producoes: Producao[]) {
   pdf.save('producoes.pdf')
 }
 
-async function exportDOCX(producoes: Producao[]) {
+async function exportDOCX(list: Producao[]) {
   const { Document, Paragraph, HeadingLevel, Packer, TextRun } = await import('docx')
   const children = []
-  const byYear = groupByYear(producoes)
-  for (const [year, items] of byYear.entries()) {
+  for (const [year, items] of groupByYear(list).entries()) {
     children.push(new Paragraph({ text: year, heading: HeadingLevel.HEADING_2 }))
-    for (const p of items) {
-      children.push(new Paragraph({ children: [new TextRun(formatBibText(p))] }))
-    }
+    for (const p of items) children.push(new Paragraph({ children: [new TextRun(formatBibText(p))] }))
     children.push(new Paragraph({ text: '' }))
   }
   const doc = new Document({ sections: [{ children }] })
@@ -244,9 +237,9 @@ async function exportDOCX(producoes: Producao[]) {
   URL.revokeObjectURL(url)
 }
 
-async function exportXLS(producoes: Producao[]) {
+async function exportXLS(list: Producao[]) {
   const { utils, writeFile } = await import('xlsx')
-  const rows = producoes.map(p => ({
+  const rows = list.map(p => ({
     'Título': p.title,
     'Autores': p.authors.join('; '),
     'Membros coLAB': (p.colabAuthors ?? []).join('; '),
@@ -262,11 +255,8 @@ async function exportXLS(producoes: Producao[]) {
 
 // ─── Upload Dialog ─────────────────────────────────────────────────────────
 
-function UploadDialog({
-  open, onClose, onSave, initialFile,
-}: {
-  open: boolean; onClose: () => void; onSave: (p: Producao) => Promise<void>
-  initialFile?: File
+function UploadDialog({ open, onClose, onSave, initialFile }: {
+  open: boolean; onClose: () => void; onSave: (p: Producao) => Promise<void>; initialFile?: File
 }) {
   const { session } = useAuth()
   const [title, setTitle] = useState('')
@@ -285,23 +275,16 @@ function UploadDialog({
 
   function reset() {
     setTitle(''); setAuthorsRaw(''); setColabSet(new Set()); setYear(''); setSource('')
-    setNotes(''); setUrl('')
-    setPdfBase64(undefined); setPdfName(undefined)
-    setLoading(false); setSaving(false)
-    didProcess.current = false
+    setNotes(''); setUrl(''); setPdfBase64(undefined); setPdfName(undefined)
+    setLoading(false); setSaving(false); didProcess.current = false
   }
 
   function toggleColab(abnt: string) {
-    setColabSet(prev => {
-      const next = new Set(prev)
-      next.has(abnt) ? next.delete(abnt) : next.add(abnt)
-      return next
-    })
+    setColabSet(prev => { const n = new Set(prev); n.has(abnt) ? n.delete(abnt) : n.add(abnt); return n })
   }
 
   async function processFile(file: File) {
-    setLoading(true)
-    setPdfName(file.name)
+    setLoading(true); setPdfName(file.name)
     try {
       const buffer = await file.arrayBuffer()
       const meta = await extractPdfMetadata(buffer)
@@ -310,27 +293,15 @@ function UploadDialog({
       if (meta.year) setYear(meta.year)
       if (meta.source) setSource(meta.source)
       const bytes = new Uint8Array(buffer)
-      const binStr = Array.from(bytes, b => String.fromCodePoint(b)).join('')
-      setPdfBase64(btoa(binStr))
-    } catch {
-      // metadata extraction failed
-    } finally {
-      setLoading(false)
-    }
+      setPdfBase64(btoa(Array.from(bytes, b => String.fromCodePoint(b)).join('')))
+    } catch { /* fields remain for manual fill */ }
+    finally { setLoading(false) }
   }
 
   useEffect(() => {
     if (!open) { didProcess.current = false; return }
-    if (initialFile && !didProcess.current) {
-      didProcess.current = true
-      processFile(initialFile)
-    }
+    if (initialFile && !didProcess.current) { didProcess.current = true; processFile(initialFile) }
   }, [open, initialFile]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (file) processFile(file)
-  }
 
   const parsedAuthors = parseRawAuthors(authorsRaw)
   const canSave = title.trim() && parsedAuthors.length > 0
@@ -338,52 +309,36 @@ function UploadDialog({
   async function handleSave() {
     if (!canSave) return
     setSaving(true)
-    const now = new Date().toISOString()
-    const producao: Producao = {
-      id: generateId(),
-      title: title.trim(),
+    await onSave({
+      id: generateId(), title: title.trim(),
       authors: parsedAuthors,
       colabAuthors: parsedAuthors.filter(a => colabSet.has(a)),
-      year: year.trim() || undefined,
-      source: source.trim() || undefined,
-      notes: notes.trim() || undefined,
-      url: url.trim() || undefined,
-      pdfBase64,
-      pdfName,
-      addedBy: session?.email ?? '',
-      createdAt: now,
-    }
-    await onSave(producao)
-    reset()
-    onClose()
-    setSaving(false)
+      year: year.trim() || undefined, source: source.trim() || undefined,
+      notes: notes.trim() || undefined, url: url.trim() || undefined,
+      pdfBase64, pdfName,
+      addedBy: session?.email ?? '', createdAt: new Date().toISOString(),
+    })
+    reset(); onClose(); setSaving(false)
   }
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) { reset(); onClose() } }}>
+    <Dialog open={open} onOpenChange={v => { if (!v) { reset(); onClose() } }}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Adicionar Produção Recente</DialogTitle>
-        </DialogHeader>
-
+        <DialogHeader><DialogTitle>Adicionar Produção Recente</DialogTitle></DialogHeader>
         <div className="space-y-4">
-          {/* PDF Upload */}
           <div>
             <Label>Arquivo PDF (opcional)</Label>
             <div
               className="mt-1.5 border-2 border-dashed border-amber-200 dark:border-amber-800 rounded-lg p-4 text-center cursor-pointer hover:bg-amber-50 dark:hover:bg-amber-950/20 transition-colors"
               onClick={() => fileRef.current?.click()}
             >
-              <input ref={fileRef} type="file" accept=".pdf" className="hidden" onChange={handleFile} />
+              <input ref={fileRef} type="file" accept=".pdf" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) processFile(f) }} />
               {loading ? (
                 <div className="flex items-center justify-center gap-2 text-amber-600 text-sm">
-                  <div className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
-                  Extraindo metadados…
+                  <div className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" /> Extraindo metadados…
                 </div>
               ) : pdfName ? (
-                <div className="flex items-center justify-center gap-2 text-amber-700 text-sm">
-                  <FileText className="w-4 h-4" /> {pdfName}
-                </div>
+                <div className="flex items-center justify-center gap-2 text-amber-700 text-sm"><FileText className="w-4 h-4" /> {pdfName}</div>
               ) : (
                 <div className="flex flex-col items-center gap-1 text-gray-400">
                   <Upload className="w-6 h-6" />
@@ -393,54 +348,24 @@ function UploadDialog({
               )}
             </div>
           </div>
-
           <div className="space-y-1.5">
             <Label>Título <span className="text-red-400">*</span></Label>
             <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="Título da obra" />
           </div>
-
           <div className="space-y-1.5">
-            <Label>
-              Autores <span className="text-red-400">*</span>
-              <span className="ml-2 text-xs font-normal text-gray-400">separados por ponto e vírgula</span>
-            </Label>
-            <AuthorsInput
-              raw={authorsRaw}
-              colabSet={colabSet}
-              onChange={setAuthorsRaw}
-              onToggleColab={toggleColab}
-            />
+            <Label>Autores <span className="text-red-400">*</span> <span className="ml-1 text-xs font-normal text-gray-400">separados por ponto e vírgula</span></Label>
+            <AuthorsInput raw={authorsRaw} colabSet={colabSet} onChange={setAuthorsRaw} onToggleColab={toggleColab} />
           </div>
-
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Ano</Label>
-              <Input value={year} onChange={e => setYear(e.target.value)} placeholder="2024" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Periódico / Livro</Label>
-              <Input value={source} onChange={e => setSource(e.target.value)} placeholder="Revista, editora…" />
-            </div>
+            <div className="space-y-1.5"><Label>Ano</Label><Input value={year} onChange={e => setYear(e.target.value)} placeholder="2024" /></div>
+            <div className="space-y-1.5"><Label>Periódico / Livro</Label><Input value={source} onChange={e => setSource(e.target.value)} placeholder="Revista, editora…" /></div>
           </div>
-
-          <div className="space-y-1.5">
-            <Label>URL (opcional)</Label>
-            <Input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://…" />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label>Notas (opcional)</Label>
-            <Input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Observações…" />
-          </div>
+          <div className="space-y-1.5"><Label>URL (opcional)</Label><Input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://…" /></div>
+          <div className="space-y-1.5"><Label>Notas (opcional)</Label><Input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Observações…" /></div>
         </div>
-
         <DialogFooter>
           <Button variant="outline" onClick={() => { reset(); onClose() }}>Cancelar</Button>
-          <Button
-            onClick={handleSave}
-            disabled={saving || loading || !canSave}
-            className="bg-amber-500 hover:bg-amber-600 text-white"
-          >
+          <Button onClick={handleSave} disabled={saving || loading || !canSave} className="bg-amber-500 hover:bg-amber-600 text-white">
             {saving ? 'Salvando…' : 'Adicionar'}
           </Button>
         </DialogFooter>
@@ -464,11 +389,7 @@ function EditDialog({ producao, onClose, onSave }: {
   const [saving, setSaving] = useState(false)
 
   function toggleColab(abnt: string) {
-    setColabSet(prev => {
-      const next = new Set(prev)
-      next.has(abnt) ? next.delete(abnt) : next.add(abnt)
-      return next
-    })
+    setColabSet(prev => { const n = new Set(prev); n.has(abnt) ? n.delete(abnt) : n.add(abnt); return n })
   }
 
   const parsedAuthors = parseRawAuthors(authorsRaw)
@@ -478,58 +399,31 @@ function EditDialog({ producao, onClose, onSave }: {
     if (!canSave) return
     setSaving(true)
     await onSave({
-      ...producao,
-      title: title.trim(),
+      ...producao, title: title.trim(),
       authors: parsedAuthors,
       colabAuthors: parsedAuthors.filter(a => colabSet.has(a)),
-      year: year.trim() || undefined,
-      source: source.trim() || undefined,
-      notes: notes.trim() || undefined,
-      url: url.trim() || undefined,
+      year: year.trim() || undefined, source: source.trim() || undefined,
+      notes: notes.trim() || undefined, url: url.trim() || undefined,
     })
-    setSaving(false)
-    onClose()
+    setSaving(false); onClose()
   }
 
   return (
-    <Dialog open onOpenChange={(v) => { if (!v) onClose() }}>
+    <Dialog open onOpenChange={v => { if (!v) onClose() }}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle>Editar Produção</DialogTitle></DialogHeader>
         <div className="space-y-4">
+          <div className="space-y-1.5"><Label>Título <span className="text-red-400">*</span></Label><Input value={title} onChange={e => setTitle(e.target.value)} /></div>
           <div className="space-y-1.5">
-            <Label>Título <span className="text-red-400">*</span></Label>
-            <Input value={title} onChange={e => setTitle(e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>
-              Autores <span className="text-red-400">*</span>
-              <span className="ml-2 text-xs font-normal text-gray-400">separados por ponto e vírgula</span>
-            </Label>
-            <AuthorsInput
-              raw={authorsRaw}
-              colabSet={colabSet}
-              onChange={setAuthorsRaw}
-              onToggleColab={toggleColab}
-            />
+            <Label>Autores <span className="text-red-400">*</span> <span className="ml-1 text-xs font-normal text-gray-400">separados por ponto e vírgula</span></Label>
+            <AuthorsInput raw={authorsRaw} colabSet={colabSet} onChange={setAuthorsRaw} onToggleColab={toggleColab} />
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Ano</Label>
-              <Input value={year} onChange={e => setYear(e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Periódico / Livro</Label>
-              <Input value={source} onChange={e => setSource(e.target.value)} />
-            </div>
+            <div className="space-y-1.5"><Label>Ano</Label><Input value={year} onChange={e => setYear(e.target.value)} /></div>
+            <div className="space-y-1.5"><Label>Periódico / Livro</Label><Input value={source} onChange={e => setSource(e.target.value)} /></div>
           </div>
-          <div className="space-y-1.5">
-            <Label>URL</Label>
-            <Input value={url} onChange={e => setUrl(e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Notas</Label>
-            <Input value={notes} onChange={e => setNotes(e.target.value)} />
-          </div>
+          <div className="space-y-1.5"><Label>URL</Label><Input value={url} onChange={e => setUrl(e.target.value)} /></div>
+          <div className="space-y-1.5"><Label>Notas</Label><Input value={notes} onChange={e => setNotes(e.target.value)} /></div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
@@ -565,28 +459,20 @@ function ProducaoCard({ p, onDelete, onEdit, onEmail }: {
     <div className="group bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-3 flex items-start justify-between gap-3 hover:shadow-sm transition-shadow">
       <div className="min-w-0 flex-1">
         <p className="text-sm font-semibold text-gray-900 dark:text-white leading-snug">{p.title}</p>
-
-        {/* Author pills */}
         {p.authors.length > 0 && (
           <div className="flex flex-wrap gap-1 mt-1.5">
-            {p.authors.map((a, i) => (
-              <AuthorPillDisplay key={i} abnt={a} isColab={colabSet.has(a)} />
-            ))}
+            {p.authors.map((a, i) => <AuthorPillDisplay key={i} abnt={a} isColab={colabSet.has(a)} />)}
             {p.year && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-gray-700/50 text-gray-400 dark:text-gray-500 ring-1 ring-gray-200 dark:ring-gray-600">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-gray-700/50 text-gray-400 ring-1 ring-gray-200 dark:ring-gray-600">
                 {p.year}
               </span>
             )}
           </div>
         )}
-
         {p.source && <p className="text-xs text-gray-400 dark:text-gray-500 italic mt-1">{p.source}</p>}
         {p.notes && <p className="text-xs text-gray-400 mt-1">{p.notes}</p>}
-
         <div className="flex items-center gap-2 mt-1.5">
-          {p.url && (
-            <a href={p.url} target="_blank" rel="noreferrer" className="text-xs text-amber-600 hover:underline">Link</a>
-          )}
+          {p.url && <a href={p.url} target="_blank" rel="noreferrer" className="text-xs text-amber-600 hover:underline">Link</a>}
           {p.pdfBase64 && (
             <button onClick={downloadPdf} className="text-xs text-amber-600 hover:underline flex items-center gap-1">
               <FileText className="w-3 h-3" /> PDF
@@ -596,16 +482,22 @@ function ProducaoCard({ p, onDelete, onEdit, onEmail }: {
         </div>
       </div>
       <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-        <button onClick={onEdit} title="Editar" className="p-1.5 rounded hover:bg-amber-50 dark:hover:bg-amber-900/30 text-gray-300 hover:text-amber-500 transition-colors">
-          <Edit2 className="w-3.5 h-3.5" />
-        </button>
-        <button onClick={onEmail} title="Enviar por email" className="p-1.5 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 text-gray-300 hover:text-blue-500 transition-colors">
-          <Mail className="w-3.5 h-3.5" />
-        </button>
-        <button onClick={onDelete} title="Remover" className="p-1.5 rounded hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-300 hover:text-red-400 transition-colors">
-          <Trash2 className="w-3.5 h-3.5" />
-        </button>
+        <button onClick={onEdit} title="Editar" className="p-1.5 rounded hover:bg-amber-50 dark:hover:bg-amber-900/30 text-gray-300 hover:text-amber-500 transition-colors"><Edit2 className="w-3.5 h-3.5" /></button>
+        <button onClick={onEmail} title="Enviar por email" className="p-1.5 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 text-gray-300 hover:text-blue-500 transition-colors"><Mail className="w-3.5 h-3.5" /></button>
+        <button onClick={onDelete} title="Remover" className="p-1.5 rounded hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-300 hover:text-red-400 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
       </div>
+    </div>
+  )
+}
+
+// ─── Section divider ──────────────────────────────────────────────────────
+
+function SectionHeader({ label }: { label: string }) {
+  return (
+    <div className="flex items-center gap-2 mb-3">
+      <div className="h-px flex-1 bg-amber-100 dark:bg-amber-900/30" />
+      <span className="text-xs font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wide px-2">{label}</span>
+      <div className="h-px flex-1 bg-amber-100 dark:bg-amber-900/30" />
     </div>
   )
 }
@@ -622,38 +514,62 @@ export function ProducoesRecentes() {
   const [exportOpen, setExportOpen] = useState(false)
   const exportRef = useRef<HTMLDivElement>(null)
   const [groupMode, setGroupMode] = useState<GroupMode>('year')
-  const [search, setSearch] = useState('')
+  const [selected, setSelected] = useState<string | null>(null)
 
-  const isDragging = useFileDrop((file) => {
-    setDropFile(file)
-    setUploadOpen(true)
-  })
+  const isDragging = useFileDrop(file => { setDropFile(file); setUploadOpen(true) })
 
-  const { data: producoes = [], isLoading } = useQuery({
-    queryKey: ['producoes'],
-    queryFn: loadProducoes,
-  })
+  const { data: producoes = [], isLoading } = useQuery({ queryKey: ['producoes'], queryFn: loadProducoes })
 
-  // Close export dropdown when clicking outside
+  // Reset selected when switching modes
+  function switchMode(m: GroupMode) { setGroupMode(m); setSelected(null) }
+
+  // Sidebar lists (years from all entries, coLAB authors only)
+  const years = useMemo(() => {
+    const set = new Set<string>()
+    for (const p of producoes) set.add(p.year ?? 'Sem ano')
+    return [...set].sort((a, b) => {
+      if (a === 'Sem ano') return 1; if (b === 'Sem ano') return -1
+      return b.localeCompare(a)
+    })
+  }, [producoes])
+
+  const colabAuthors = useMemo(() => {
+    const set = new Set<string>()
+    for (const p of producoes) for (const a of p.colabAuthors ?? []) set.add(a)
+    return [...set].sort((a, b) =>
+      toDisplayName(a).localeCompare(toDisplayName(b), 'pt-BR', { sensitivity: 'base' })
+    )
+  }, [producoes])
+
+  // Count helpers for sidebar badges
+  const yearCount = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const p of producoes) { const y = p.year ?? 'Sem ano'; map.set(y, (map.get(y) ?? 0) + 1) }
+    return map
+  }, [producoes])
+
+  const authorCount = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const p of producoes) for (const a of p.colabAuthors ?? []) map.set(a, (map.get(a) ?? 0) + 1)
+    return map
+  }, [producoes])
+
+  // Filtered list based on sidebar selection
+  const filtered = useMemo(() => {
+    if (!selected) return producoes
+    if (groupMode === 'year') return producoes.filter(p => (p.year ?? 'Sem ano') === selected)
+    return producoes.filter(p => (p.colabAuthors ?? []).includes(selected))
+  }, [producoes, selected, groupMode])
+
+  const byYear = useMemo(() => groupByYear(filtered), [filtered])
+  const byAuthor = useMemo(() => groupByColabAuthor(filtered), [filtered])
+
   useEffect(() => {
     if (!exportOpen) return
-    function onClickOut(e: MouseEvent) {
-      if (exportRef.current && !exportRef.current.contains(e.target as Node)) setExportOpen(false)
-    }
-    document.addEventListener('mousedown', onClickOut)
-    return () => document.removeEventListener('mousedown', onClickOut)
+    function onOut(e: MouseEvent) { if (exportRef.current && !exportRef.current.contains(e.target as Node)) setExportOpen(false) }
+    document.addEventListener('mousedown', onOut)
+    return () => document.removeEventListener('mousedown', onOut)
   }, [exportOpen])
-
-  const filtered = producoes.filter(p => {
-    if (!search.trim()) return true
-    const q = search.toLowerCase()
-    return (
-      p.title.toLowerCase().includes(q) ||
-      p.authors.some(a => toDisplayName(a).toLowerCase().includes(q) || a.toLowerCase().includes(q)) ||
-      (p.year ?? '').includes(q) ||
-      (p.source ?? '').toLowerCase().includes(q)
-    )
-  })
 
   async function handleSave(p: Producao) {
     await saveProducao(p)
@@ -675,13 +591,9 @@ export function ProducoesRecentes() {
       const idx = await loadUsersIndex()
       const recipients = idx.emails.filter(e => e !== session?.email)
       await sendLeituraNotification({
-        senderEmail: session?.email ?? '',
-        recipientEmails: recipients,
-        leituraTitle: p.title,
-        leituraAuthors: p.authors.join('; '),
-        leituraYear: p.year,
-        leituraSource: p.source,
-        meetingDate: '',
+        senderEmail: session?.email ?? '', recipientEmails: recipients,
+        leituraTitle: p.title, leituraAuthors: p.authors.join('; '),
+        leituraYear: p.year, leituraSource: p.source, meetingDate: '',
       })
       toast({ title: 'Notificação enviada' })
     } catch (err) {
@@ -695,173 +607,196 @@ export function ProducoesRecentes() {
     </div>
   )
 
-  const byAuthor = groupByAuthor(filtered)
-  const byYear = groupByYear(filtered)
+  // ─── sidebar item style ──────────────────────────────────────────────────
+  function itemCls(key: string) {
+    return `w-full text-left flex items-center justify-between px-4 py-2 text-sm transition-colors border-l-2 ${
+      selected === key
+        ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 font-medium'
+        : 'border-transparent text-gray-600 dark:text-gray-400 hover:bg-white dark:hover:bg-gray-800/60 hover:text-gray-900 dark:hover:text-white'
+    }`
+  }
+
+  // ─── content render ──────────────────────────────────────────────────────
+  function renderContent() {
+    if (producoes.length === 0) return (
+      <div className="text-center py-20">
+        <BookMarked className="w-10 h-10 text-gray-200 dark:text-gray-700 mx-auto mb-3" />
+        <p className="text-gray-400 dark:text-gray-500">Nenhuma produção cadastrada</p>
+        <Button className="mt-4 bg-amber-500 hover:bg-amber-600 text-white" onClick={() => setUploadOpen(true)}>
+          <Plus className="w-4 h-4" /> Adicionar primeira produção
+        </Button>
+      </div>
+    )
+
+    if (filtered.length === 0) return (
+      <div className="text-center py-16 text-gray-400">Nenhuma produção neste filtro.</div>
+    )
+
+    if (groupMode === 'year') return (
+      <div className="space-y-6">
+        {[...byYear.entries()].map(([year, items]) => (
+          <div key={year}>
+            <SectionHeader label={year} />
+            <div className="space-y-2">{items.map(p => (
+              <ProducaoCard key={p.id} p={p} onDelete={() => handleDelete(p.id)} onEdit={() => setEditProducao(p)} onEmail={() => handleEmail(p)} />
+            ))}</div>
+          </div>
+        ))}
+      </div>
+    )
+
+    // Por autor (coLAB only)
+    return (
+      <div className="space-y-6">
+        {[...byAuthor.entries()].map(([abnt, items]) => (
+          <div key={abnt}>
+            <SectionHeader label={abnt === '__none__' ? 'Sem autor coLAB' : toDisplayName(abnt)} />
+            <div className="space-y-2">{items.map(p => (
+              <ProducaoCard key={`${abnt}-${p.id}`} p={p} onDelete={() => handleDelete(p.id)} onEdit={() => setEditProducao(p)} onEmail={() => handleEmail(p)} />
+            ))}</div>
+          </div>
+        ))}
+      </div>
+    )
+  }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white">Produções Recentes</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Produções bibliográficas do grupo</p>
+    <div className="flex -mx-6 -mt-6 lg:-mx-8 lg:-mt-8 h-[calc(100dvh-3.5rem)] lg:h-dvh overflow-hidden">
+
+      {/* ── Sidebar ── */}
+      <aside className="hidden lg:flex flex-col w-56 flex-shrink-0 border-r border-gray-100 dark:border-gray-800 bg-gray-50/40 dark:bg-gray-900/60 overflow-y-auto">
+
+        {/* Mode toggle */}
+        <div className="flex-shrink-0 px-3 pt-4 pb-2 border-b border-gray-100 dark:border-gray-800">
+          <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest px-1 mb-2">Organizar por</p>
+          <div className="flex flex-col gap-0.5">
+            <button
+              onClick={() => switchMode('year')}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
+                groupMode === 'year'
+                  ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 font-medium'
+                  : 'text-gray-500 dark:text-gray-400 hover:bg-white dark:hover:bg-gray-800/60 hover:text-gray-900 dark:hover:text-white'
+              }`}
+            >
+              <Calendar className="w-3.5 h-3.5 flex-shrink-0" /> Ano
+            </button>
+            <button
+              onClick={() => switchMode('author')}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
+                groupMode === 'author'
+                  ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 font-medium'
+                  : 'text-gray-500 dark:text-gray-400 hover:bg-white dark:hover:bg-gray-800/60 hover:text-gray-900 dark:hover:text-white'
+              }`}
+            >
+              <Users className="w-3.5 h-3.5 flex-shrink-0" /> Autor
+            </button>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          {producoes.length > 0 && (
-            <div className="relative" ref={exportRef}>
-              <Button variant="outline" size="sm" onClick={() => setExportOpen(v => !v)}>
-                <Download className="w-4 h-4" /> Exportar
-              </Button>
-              {exportOpen && (
-                <div className="absolute right-0 top-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-30 py-1 min-w-[150px]">
-                  {[
-                    { label: 'Markdown', fn: () => exportMarkdown(filtered) },
-                    { label: 'PDF', fn: () => exportPDF(filtered) },
-                    { label: 'Word (DOCX)', fn: () => exportDOCX(filtered) },
-                    { label: 'Excel (XLS)', fn: () => exportXLS(filtered) },
-                  ].map(({ label, fn }) => (
-                    <button key={label} onClick={() => { fn(); setExportOpen(false) }}
-                      className="w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 text-left transition-colors">
-                      {label}
-                    </button>
-                  ))}
+
+        {/* Filter list */}
+        <nav className="flex-1 overflow-y-auto py-2">
+          {/* "All" entry */}
+          <button
+            onClick={() => setSelected(null)}
+            className={`w-full text-left flex items-center justify-between px-4 py-2 text-sm transition-colors border-l-2 ${
+              selected === null
+                ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 font-medium'
+                : 'border-transparent text-gray-600 dark:text-gray-400 hover:bg-white dark:hover:bg-gray-800/60 hover:text-gray-900 dark:hover:text-white'
+            }`}
+          >
+            <span>Todos</span>
+            <span className="text-xs text-gray-400">{producoes.length}</span>
+          </button>
+
+          <div className="h-px mx-4 my-1.5 bg-gray-100 dark:bg-gray-800" />
+
+          {groupMode === 'year'
+            ? years.map(y => (
+                <button key={y} onClick={() => setSelected(y === selected ? null : y)} className={itemCls(y)}>
+                  <span className="truncate">{y}</span>
+                  <span className="text-xs text-gray-400 flex-shrink-0 ml-1">{yearCount.get(y) ?? 0}</span>
+                </button>
+              ))
+            : colabAuthors.length === 0
+              ? <p className="px-4 py-3 text-xs text-gray-400 italic">Nenhum autor coLAB cadastrado</p>
+              : colabAuthors.map(abnt => (
+                  <button key={abnt} onClick={() => setSelected(abnt === selected ? null : abnt)} className={itemCls(abnt)}>
+                    <span className="truncate text-sm leading-tight">{toDisplayName(abnt)}</span>
+                    <span className="text-xs text-gray-400 flex-shrink-0 ml-1">{authorCount.get(abnt) ?? 0}</span>
+                  </button>
+                ))
+          }
+        </nav>
+      </aside>
+
+      {/* ── Main ── */}
+      <main className="flex-1 overflow-y-auto">
+        <div className="px-6 py-6 lg:px-8 lg:py-8 space-y-6 max-w-4xl">
+
+          {/* Header */}
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <h1 className="text-xl font-bold text-gray-900 dark:text-white">Produções Recentes</h1>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                {selected
+                  ? groupMode === 'year' ? `Ano ${selected}` : toDisplayName(selected)
+                  : 'Produções bibliográficas do grupo'}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {/* Mobile mode toggle (sidebar hidden on small screens) */}
+              <div className="lg:hidden flex items-center gap-1 rounded-lg border border-gray-200 dark:border-gray-700 p-0.5">
+                <button onClick={() => switchMode('year')} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${groupMode === 'year' ? 'bg-white dark:bg-gray-700 text-amber-600 dark:text-amber-400 shadow-sm' : 'text-gray-500 dark:text-gray-400'}`}>
+                  <Calendar className="w-3.5 h-3.5" /> Ano
+                </button>
+                <button onClick={() => switchMode('author')} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${groupMode === 'author' ? 'bg-white dark:bg-gray-700 text-amber-600 dark:text-amber-400 shadow-sm' : 'text-gray-500 dark:text-gray-400'}`}>
+                  <Users className="w-3.5 h-3.5" /> Autor
+                </button>
+              </div>
+              {selected && (
+                <button onClick={() => setSelected(null)} className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
+                  <X className="w-3 h-3" /> Limpar filtro
+                </button>
+              )}
+              {producoes.length > 0 && (
+                <div className="relative" ref={exportRef}>
+                  <Button variant="outline" size="sm" onClick={() => setExportOpen(v => !v)}>
+                    <Download className="w-4 h-4" /> Exportar
+                  </Button>
+                  {exportOpen && (
+                    <div className="absolute right-0 top-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-30 py-1 min-w-[150px]">
+                      {[
+                        { label: 'Markdown', fn: () => exportMarkdown(filtered) },
+                        { label: 'PDF', fn: () => exportPDF(filtered) },
+                        { label: 'Word (DOCX)', fn: () => exportDOCX(filtered) },
+                        { label: 'Excel (XLS)', fn: () => exportXLS(filtered) },
+                      ].map(({ label, fn }) => (
+                        <button key={label} onClick={() => { fn(); setExportOpen(false) }}
+                          className="w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 text-left transition-colors">
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
+              <Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-white" onClick={() => setUploadOpen(true)}>
+                <Plus className="w-4 h-4" /> Adicionar
+              </Button>
             </div>
-          )}
-          <Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-white" onClick={() => setUploadOpen(true)}>
-            <Plus className="w-4 h-4" /> Adicionar
-          </Button>
-        </div>
-      </div>
-
-      {/* Toolbar: search + group toggle */}
-      {producoes.length > 0 && (
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="flex-1 min-w-[200px]">
-            <Input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Buscar por título, autor, ano…"
-              className="text-sm"
-            />
           </div>
-          {search && (
-            <button onClick={() => setSearch('')} className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1">
-              <X className="w-3 h-3" /> Limpar
-            </button>
-          )}
-          <div className="flex items-center gap-1 rounded-lg border border-gray-200 dark:border-gray-700 p-0.5 bg-gray-50 dark:bg-gray-800">
-            <button
-              onClick={() => setGroupMode('year')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                groupMode === 'year'
-                  ? 'bg-white dark:bg-gray-700 text-amber-600 dark:text-amber-400 shadow-sm'
-                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
-              }`}
-            >
-              <Calendar className="w-3.5 h-3.5" /> Por ano
-            </button>
-            <button
-              onClick={() => setGroupMode('author')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                groupMode === 'author'
-                  ? 'bg-white dark:bg-gray-700 text-amber-600 dark:text-amber-400 shadow-sm'
-                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
-              }`}
-            >
-              <Users className="w-3.5 h-3.5" /> Por autor
-            </button>
-          </div>
-        </div>
-      )}
 
-      {/* Empty state */}
-      {producoes.length === 0 ? (
-        <div className="text-center py-16">
-          <BookMarked className="w-10 h-10 text-gray-200 dark:text-gray-700 mx-auto mb-3" />
-          <p className="text-gray-400 dark:text-gray-500">Nenhuma produção cadastrada</p>
-          <Button className="mt-4 bg-amber-500 hover:bg-amber-600 text-white" onClick={() => setUploadOpen(true)}>
-            <Plus className="w-4 h-4" /> Adicionar primeira produção
-          </Button>
+          {renderContent()}
         </div>
-      ) : filtered.length === 0 ? (
-        <div className="text-center py-10 text-gray-400">Nenhuma produção encontrada.</div>
-      ) : groupMode === 'year' ? (
-        /* ─── Por ano ─── */
-        <div className="space-y-6">
-          {[...byYear.entries()].map(([year, items]) => (
-            <div key={year}>
-              <div className="flex items-center gap-2 mb-3">
-                <div className="h-px flex-1 bg-amber-100 dark:bg-amber-900/30" />
-                <span className="text-xs font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wide px-2">
-                  {year}
-                </span>
-                <div className="h-px flex-1 bg-amber-100 dark:bg-amber-900/30" />
-              </div>
-              <div className="space-y-2">
-                {items.map(p => (
-                  <ProducaoCard
-                    key={p.id} p={p}
-                    onDelete={() => handleDelete(p.id)}
-                    onEdit={() => setEditProducao(p)}
-                    onEmail={() => handleEmail(p)}
-                  />
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        /* ─── Por autor ─── */
-        <div className="space-y-6">
-          {[...byAuthor.entries()].map(([abnt, { displayName, entries }]) => (
-            <div key={abnt}>
-              <div className="flex items-center gap-2 mb-3">
-                <div className="h-px flex-1 bg-amber-100 dark:bg-amber-900/30" />
-                <span className="text-xs font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wide px-2 flex items-center gap-1.5">
-                  {/* Show diamond if this person is a coLAB member in any entry */}
-                  {entries.some(e => (e.colabAuthors ?? []).includes(abnt)) && (
-                    <span className="text-amber-400 normal-case text-[10px]">◆</span>
-                  )}
-                  {displayName}
-                </span>
-                <div className="h-px flex-1 bg-amber-100 dark:bg-amber-900/30" />
-              </div>
-              <div className="space-y-2">
-                {entries.map(p => (
-                  <ProducaoCard
-                    key={`${abnt}-${p.id}`} p={p}
-                    onDelete={() => handleDelete(p.id)}
-                    onEdit={() => setEditProducao(p)}
-                    onEmail={() => handleEmail(p)}
-                  />
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      </main>
 
-      <UploadDialog
-        open={uploadOpen}
-        onClose={() => { setUploadOpen(false); setDropFile(null) }}
-        onSave={handleSave}
-        initialFile={dropFile ?? undefined}
-      />
-      {editProducao && (
-        <EditDialog producao={editProducao} onClose={() => setEditProducao(null)} onSave={handleSave} />
-      )}
+      {/* Dialogs */}
+      <UploadDialog open={uploadOpen} onClose={() => { setUploadOpen(false); setDropFile(null) }} onSave={handleSave} initialFile={dropFile ?? undefined} />
+      {editProducao && <EditDialog producao={editProducao} onClose={() => setEditProducao(null)} onSave={handleSave} />}
       <ToastContainer toasts={toasts} onDismiss={dismiss} />
 
-      {/* Full-page drop overlay */}
-      <div
-        className={`fixed inset-4 z-50 flex flex-col items-center justify-center rounded-2xl border-2 border-dashed transition-all duration-200 pointer-events-none ${
-          isDragging
-            ? 'border-amber-400 dark:border-amber-500 bg-amber-50/80 dark:bg-amber-950/50 opacity-100'
-            : 'border-transparent opacity-0'
-        }`}
-      >
+      {/* D&D overlay */}
+      <div className={`fixed inset-4 z-50 flex flex-col items-center justify-center rounded-2xl border-2 border-dashed transition-all duration-200 pointer-events-none ${isDragging ? 'border-amber-400 dark:border-amber-500 bg-amber-50/80 dark:bg-amber-950/50 opacity-100' : 'border-transparent opacity-0'}`}>
         <Upload className="w-12 h-12 text-amber-400 dark:text-amber-500 mb-3" />
         <p className="text-base font-semibold text-amber-700 dark:text-amber-300">Soltar para adicionar</p>
         <p className="text-sm text-amber-500 dark:text-amber-400 mt-1">O PDF será lido automaticamente</p>
