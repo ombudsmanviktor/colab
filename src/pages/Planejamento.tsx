@@ -1,9 +1,9 @@
 import { useState, useMemo, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd'
+import { DragDropContext, Droppable, Draggable, type DropResult, type DraggableProvided } from '@hello-pangea/dnd'
 import {
   Plus, Calendar, Archive, ChevronDown, ChevronRight, Trash2,
-  GripVertical, BookOpen, X, Edit2, ArchiveRestore, Star,
+  GripVertical, BookOpen, X, Edit2, Star,
 } from 'lucide-react'
 import { useToast } from '@/hooks/useToast'
 import { ToastContainer } from '@/components/ui/toast'
@@ -259,7 +259,7 @@ function MeetingCard({
 }: {
   meeting: PlannedMeeting
   readings: PlanReading[]
-  provided: { innerRef: (el: HTMLElement | null) => void; draggableProps: Record<string, unknown>; dragHandleProps: Record<string, unknown> | null }
+  provided: DraggableProvided
   onDescChange: (desc: string) => void
   onRemoveReading: () => void
   onDeleteMeeting: () => void
@@ -326,7 +326,7 @@ function MeetingCard({
               <Trash2 className="w-3.5 h-3.5" />
             </button>
           )}
-          <div {...(provided.dragHandleProps as React.HTMLAttributes<HTMLDivElement>)} className="cursor-grab p-1 text-gray-300 hover:text-gray-500">
+          <div {...provided.dragHandleProps} className="cursor-grab p-1 text-gray-300 hover:text-gray-500">
             <GripVertical className="w-4 h-4" />
           </div>
         </div>
@@ -460,11 +460,7 @@ function PlanDetail({
                         <MeetingCard
                           meeting={meeting}
                           readings={plan.readings}
-                          provided={{
-                            innerRef: dragProvided.innerRef,
-                            draggableProps: dragProvided.draggableProps as Record<string, unknown>,
-                            dragHandleProps: dragProvided.dragHandleProps as Record<string, unknown> | null,
-                          }}
+                          provided={dragProvided}
                           onDescChange={desc => updateMeetingDesc(meeting.id, desc)}
                           onRemoveReading={() => removeReadingFromMeeting(meeting.id)}
                           onDeleteMeeting={() => deleteSpecialMeeting(meeting.id)}
