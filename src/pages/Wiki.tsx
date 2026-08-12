@@ -117,6 +117,84 @@ function extractHeadings(content: string): { level: number; text: string }[] {
     })
 }
 
+// ─── Image with download button ───────────────────────────────────────────
+
+const MIME_EXT: Record<string, string> = {
+  jpeg: 'jpg', jpg: 'jpg', png: 'png', gif: 'gif', webp: 'webp', 'svg+xml': 'svg',
+}
+const MIME_LABEL: Record<string, string> = {
+  jpeg: 'JPG', jpg: 'JPG', png: 'PNG', gif: 'GIF', webp: 'WebP', 'svg+xml': 'SVG',
+}
+
+function parseDataUri(src: string): { subtype: string; ext: string; label: string } | null {
+  const m = src.match(/^data:image\/([^;]+);/)
+  if (!m) return null
+  const sub = m[1]
+  return { subtype: sub, ext: MIME_EXT[sub] ?? sub, label: MIME_LABEL[sub] ?? sub.toUpperCase() }
+}
+
+function triggerAnchorDownload(href: string, filename: string) {
+  const a = document.createElement('a')
+  a.href = href; a.download = filename
+  document.body.appendChild(a); a.click(); document.body.removeChild(a)
+}
+
+function canvasToPng(src: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => {
+      const c = document.createElement('canvas')
+      c.width = img.naturalWidth; c.height = img.naturalHeight
+      const ctx = c.getContext('2d')
+      if (!ctx) { reject(new Error('No context')); return }
+      ctx.drawImage(img, 0, 0)
+      resolve(c.toDataURL('image/png'))
+    }
+    img.onerror = () => reject(new Error('Load failed'))
+    img.src = src
+  })
+}
+
+function WikiImage({ src, alt }: { src?: string; alt?: string }) {
+  const info = src ? parseDataUri(src) : null
+  const baseName = (alt ?? 'imagem').replace(/\.[^.]+$/, '')
+
+  function downloadOriginal() {
+    if (!src) return
+    if (!info) { window.open(src, '_blank'); return }
+    triggerAnchorDownload(src, `${baseName}.${info.ext}`)
+  }
+
+  function downloadPng() {
+    if (!src || !info) return
+    if (info.ext === 'png') {
+      triggerAnchorDownload(src, `${baseName}.png`)
+    } else {
+      canvasToPng(src)
+        .then(png => triggerAnchorDownload(png, `${baseName}.png`))
+        .catch(() => triggerAnchorDownload(src, `${baseName}.png`))
+    }
+  }
+
+  const btnCls = 'flex items-center gap-1 px-2 py-1 text-xs font-medium bg-black/60 hover:bg-black/80 text-white rounded backdrop-blur-sm transition-colors'
+
+  return (
+    <span className="relative block group my-3">
+      <img src={src ?? ''} alt={alt ?? ''} className="max-w-full rounded-lg shadow-sm" />
+      <span className="absolute top-2 right-2 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none group-hover:pointer-events-auto">
+        {info && info.ext !== 'png' && (
+          <button type="button" onClick={downloadPng} title="Baixar como PNG" className={btnCls}>
+            <Download className="w-3 h-3" /> PNG
+          </button>
+        )}
+        <button type="button" onClick={downloadOriginal} title={info ? `Baixar ${info.label}` : 'Abrir imagem'} className={btnCls}>
+          <Download className="w-3 h-3" /> {info?.label ?? 'Baixar'}
+        </button>
+      </span>
+    </span>
+  )
+}
+
 function MdPreview({ content }: { content: string }) {
   if (!content.trim()) {
     return <p className="text-sm text-gray-300 dark:text-gray-600 italic">O preview aparece aqui…</p>
@@ -127,9 +205,7 @@ function MdPreview({ content }: { content: string }) {
         remarkPlugins={[remarkGfm]}
         urlTransform={safeUrl}
         components={{
-          img: ({ src, alt }) => (
-            <img src={src ?? ''} alt={alt ?? ''} className="max-w-full rounded-lg shadow-sm my-3" />
-          ),
+          img: ({ src, alt }) => <WikiImage src={src} alt={alt} />,
         }}
       >
         {content}
@@ -462,9 +538,7 @@ function WikiViewer({ entry, onEdit, onDelete }: {
               remarkPlugins={[remarkGfm]}
               urlTransform={safeUrl}
               components={{
-                img: ({ src, alt }) => (
-                  <img src={src ?? ''} alt={alt ?? ''} className="max-w-full rounded-lg shadow-sm my-3" />
-                ),
+                img: ({ src, alt }) => <WikiImage src={src} alt={alt} />,
               }}
             >
               {entry.content}
