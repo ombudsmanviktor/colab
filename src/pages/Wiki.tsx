@@ -4,8 +4,9 @@ import {
   BookText, Plus, Trash2, Edit2, X, Link2, ImagePlus,
   Bold, Italic, Strikethrough, Heading1, Heading2, Heading3,
   List, ListOrdered, Quote, Code, Minus, Download, Upload,
-  Search, ChevronLeft, FilePlus,
+  Search, ChevronLeft, FilePlus, GripVertical,
 } from 'lucide-react'
+import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useAuth } from '@/contexts/AuthContext'
@@ -87,6 +88,37 @@ function insertTextAtCursor(
   return { value: v.slice(0, s) + text + v.slice(e), sel: [s + text.length, s + text.length] }
 }
 
+// ─── Shared markdown preview styles ──────────────────────────────────────
+
+const PROSE_CLS = [
+  'prose prose-sm dark:prose-invert max-w-none',
+  'prose-headings:text-gray-900 dark:prose-headings:text-white',
+  'prose-a:text-amber-700 dark:prose-a:text-amber-400',
+  'prose-hr:border-amber-100 dark:prose-hr:border-amber-900/30',
+  'prose-blockquote:border-l-amber-400 prose-blockquote:text-gray-600 dark:prose-blockquote:text-gray-400',
+  'prose-code:bg-amber-50 dark:prose-code:bg-amber-950/30 prose-code:text-amber-800 dark:prose-code:text-amber-300 prose-code:rounded prose-code:px-1',
+].join(' ')
+
+function MdPreview({ content }: { content: string }) {
+  if (!content.trim()) {
+    return <p className="text-sm text-gray-300 dark:text-gray-600 italic">O preview aparece aqui…</p>
+  }
+  return (
+    <div className={PROSE_CLS}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          img: ({ src, alt }) => (
+            <img src={src} alt={alt ?? ''} className="max-w-full rounded-lg shadow-sm my-3" />
+          ),
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+    </div>
+  )
+}
+
 // ─── Link Dialog ──────────────────────────────────────────────────────────
 
 function LinkDialog({ initialText, onInsert, onClose }: {
@@ -161,7 +193,7 @@ function Toolbar({ onApply, onLinkClick, onImageClick }: {
     // eslint-disable-next-line jsx-a11y/no-static-element-interactions
     <div
       onKeyDown={handleKey}
-      className="flex items-center gap-0.5 flex-wrap px-3 py-1.5 border-b border-amber-100 dark:border-amber-900/30 bg-amber-50/60 dark:bg-amber-950/20 sticky top-0 z-10"
+      className="flex items-center gap-0.5 flex-wrap px-3 py-1.5 border-b border-amber-100 dark:border-amber-900/30 bg-amber-50/60 dark:bg-amber-950/20"
     >
       {TOOLS.map((t, i) => {
         if (t === SEP) return <div key={i} className="w-px h-4 bg-gray-200 dark:bg-gray-700 mx-1" />
@@ -174,7 +206,7 @@ function Toolbar({ onApply, onLinkClick, onImageClick }: {
             title={t.title}
             type="button"
             onMouseDown={e => {
-              e.preventDefault() // keep textarea focus
+              e.preventDefault()
               if (isLink) { onLinkClick(); return }
               if (isImg)  { onImageClick(); return }
               onApply(t.id)
@@ -202,6 +234,7 @@ function WikiEditor({ entry, onSave, onCancel, isNew }: {
   const [saving, setSaving] = useState(false)
   const [showLink, setShowLink] = useState(false)
   const [linkInitialText, setLinkInitialText] = useState('')
+  const [mobileTab, setMobileTab] = useState<'edit' | 'preview'>('edit')
   const taRef = useRef<HTMLTextAreaElement>(null)
   const imgInputRef = useRef<HTMLInputElement>(null)
   const pendingSel = useRef<[number, number] | null>(null)
@@ -275,7 +308,7 @@ function WikiEditor({ entry, onSave, onCancel, isNew }: {
   return (
     <div className="flex flex-col h-full">
       {/* Title */}
-      <div className="px-6 pt-5 pb-3 border-b border-gray-100 dark:border-gray-800">
+      <div className="px-6 pt-5 pb-3 border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
         <input
           ref={titleRef}
           value={title}
@@ -285,26 +318,62 @@ function WikiEditor({ entry, onSave, onCancel, isNew }: {
         />
       </div>
 
-      {/* Toolbar */}
-      <Toolbar
-        onApply={applyFmt}
-        onLinkClick={openLink}
-        onImageClick={() => imgInputRef.current?.click()}
-      />
+      {/* Mobile: Edit/Preview tabs */}
+      <div className="flex lg:hidden border-b border-gray-100 dark:border-gray-800 flex-shrink-0 bg-white dark:bg-gray-900">
+        <button
+          onMouseDown={e => { e.preventDefault(); setMobileTab('edit') }}
+          className={`flex-1 py-2 text-xs font-medium transition-colors border-b-2 ${
+            mobileTab === 'edit'
+              ? 'text-amber-700 dark:text-amber-300 border-amber-500'
+              : 'text-gray-500 dark:text-gray-400 border-transparent'
+          }`}
+        >
+          Editar
+        </button>
+        <button
+          onMouseDown={e => { e.preventDefault(); setMobileTab('preview') }}
+          className={`flex-1 py-2 text-xs font-medium transition-colors border-b-2 ${
+            mobileTab === 'preview'
+              ? 'text-amber-700 dark:text-amber-300 border-amber-500'
+              : 'text-gray-500 dark:text-gray-400 border-transparent'
+          }`}
+        >
+          Preview
+        </button>
+      </div>
+
+      {/* Toolbar: always on desktop, hidden in preview mode on mobile */}
+      <div className={`flex-shrink-0 ${mobileTab === 'preview' ? 'hidden lg:block' : ''}`}>
+        <Toolbar
+          onApply={applyFmt}
+          onLinkClick={openLink}
+          onImageClick={() => imgInputRef.current?.click()}
+        />
+      </div>
       <input ref={imgInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageFile} />
 
-      {/* Textarea */}
-      <textarea
-        ref={taRef}
-        value={content}
-        onChange={e => setContent(e.target.value)}
-        placeholder="Escreva o conteúdo em Markdown…"
-        spellCheck
-        className="flex-1 w-full px-6 py-4 text-sm leading-relaxed text-gray-800 dark:text-gray-200 bg-transparent outline-none resize-none placeholder:text-gray-300 dark:placeholder:text-gray-600 font-mono"
-      />
+      {/* Split body: textarea (left) + live preview (right) */}
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+        {/* Left: raw markdown */}
+        <div className={`${mobileTab === 'preview' ? 'hidden' : 'flex'} lg:flex flex-1 overflow-hidden border-r border-gray-100 dark:border-gray-800`}>
+          <textarea
+            ref={taRef}
+            value={content}
+            onChange={e => setContent(e.target.value)}
+            placeholder="Escreva o conteúdo em Markdown…"
+            spellCheck
+            className="w-full h-full px-6 py-4 text-sm leading-relaxed text-gray-800 dark:text-gray-200 bg-transparent outline-none resize-none placeholder:text-gray-300 dark:placeholder:text-gray-600 font-mono overflow-y-auto"
+          />
+        </div>
 
-      {/* Footer actions */}
-      <div className="flex items-center justify-between px-6 py-3 border-t border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900">
+        {/* Right: live rendered preview */}
+        <div className={`${mobileTab === 'edit' ? 'hidden' : 'flex'} lg:flex flex-1 flex-col overflow-y-auto px-6 py-4 bg-gray-50/40 dark:bg-gray-900/30`}>
+          <MdPreview content={content} />
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="flex items-center justify-between px-6 py-3 border-t border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 flex-shrink-0">
         <button onClick={handleExport} title="Exportar como .md"
           className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-amber-600 transition-colors">
           <Download className="w-3.5 h-3.5" /> Exportar .md
@@ -345,14 +414,10 @@ function WikiViewer({ entry, onEdit, onDelete }: {
     URL.revokeObjectURL(url)
   }
 
-  const updatedDate = entry.updated_at
-    ? new Date(entry.updated_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })
-    : ''
-
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-start justify-between px-6 pt-5 pb-3 border-b border-gray-100 dark:border-gray-800">
+      <div className="flex items-start justify-between px-6 pt-5 pb-3 border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex-1 min-w-0 pr-4">{entry.title}</h1>
         <div className="flex items-center gap-1 flex-shrink-0">
           <button onClick={handleExport} title="Exportar como .md"
@@ -373,7 +438,7 @@ function WikiViewer({ entry, onEdit, onDelete }: {
       {/* Content */}
       <div className="flex-1 overflow-y-auto px-6 py-5">
         {entry.content.trim() ? (
-          <div className="prose prose-sm dark:prose-invert prose-headings:text-gray-900 dark:prose-headings:text-white prose-a:text-amber-700 dark:prose-a:text-amber-400 prose-hr:border-amber-100 dark:prose-hr:border-amber-900/30 prose-blockquote:border-l-amber-400 prose-blockquote:text-gray-600 dark:prose-blockquote:text-gray-400 prose-code:bg-amber-50 dark:prose-code:bg-amber-950/30 prose-code:text-amber-800 dark:prose-code:text-amber-300 prose-code:rounded prose-code:px-1 max-w-none">
+          <div className={PROSE_CLS}>
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               components={{
@@ -389,15 +454,52 @@ function WikiViewer({ entry, onEdit, onDelete }: {
           <p className="text-sm text-gray-300 dark:text-gray-600 italic">Sem conteúdo. Clique em Editar para começar.</p>
         )}
       </div>
+    </div>
+  )
+}
 
-      {/* Footer */}
-      {updatedDate && (
-        <div className="px-6 py-2 border-t border-gray-100 dark:border-gray-800">
-          <p className="text-xs text-gray-400 dark:text-gray-600">
-            Atualizado em {updatedDate}{entry.updated_by ? ` por ${entry.updated_by}` : ''}
-          </p>
+// ─── Table of Contents (home view) ───────────────────────────────────────
+
+function WikiToc({ entries, onSelectEntry, onNew }: {
+  entries: WikiEntry[]
+  onSelectEntry: (id: string) => void
+  onNew: () => void
+}) {
+  return (
+    <div className="flex-1 overflow-y-auto px-8 py-8">
+      <div className="max-w-2xl">
+        <div className="flex items-center gap-3 mb-6">
+          <BookText className="w-5 h-5 text-amber-500" />
+          <h1 className="text-xl font-bold text-gray-900 dark:text-white">Índice</h1>
         </div>
-      )}
+        {entries.length === 0 ? (
+          <div className="text-center py-12">
+            <BookText className="w-10 h-10 text-gray-200 dark:text-gray-700 mx-auto mb-3" />
+            <p className="text-gray-400 dark:text-gray-500 text-sm mb-4">Nenhuma entrada ainda</p>
+            <Button onClick={onNew} className="bg-amber-500 hover:bg-amber-600 text-white">
+              <FilePlus className="w-4 h-4" /> Nova entrada
+            </Button>
+          </div>
+        ) : (
+          <ol className="space-y-0.5">
+            {entries.map((entry, i) => (
+              <li key={entry.id}>
+                <button
+                  onClick={() => onSelectEntry(entry.id)}
+                  className="flex items-baseline gap-3 text-left w-full py-1.5 px-2 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-950/30 group transition-colors"
+                >
+                  <span className="text-xs text-gray-400 dark:text-gray-600 w-5 text-right flex-shrink-0 tabular-nums">
+                    {i + 1}.
+                  </span>
+                  <span className="text-sm text-amber-700 dark:text-amber-400 group-hover:underline">
+                    {entry.title}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ol>
+        )}
+      </div>
     </div>
   )
 }
@@ -420,7 +522,8 @@ export function WikiPage() {
   const [showMobileEntry, setShowMobileEntry] = useState(false)
   const importRef = useRef<HTMLInputElement>(null)
 
-  const filtered = entries.filter(e =>
+  const sorted = [...entries].sort((a, b) => a.order - b.order)
+  const filtered = sorted.filter(e =>
     e.title.toLowerCase().includes(search.toLowerCase()) ||
     e.content.toLowerCase().includes(search.toLowerCase())
   )
@@ -447,7 +550,6 @@ export function WikiPage() {
       created_by: session?.email ?? '',
       updated_by: session?.email ?? '',
     }
-    // Optimistically add to cache so editor can reference it
     queryClient.setQueryData(['wiki'], (prev: WikiEntry[] = []) => [...prev, newEntry])
     setSelectedId(newEntry.id)
     setEditingId(newEntry.id)
@@ -482,7 +584,6 @@ export function WikiPage() {
   }
 
   function handleCancel(id: string) {
-    // If the entry was newly created and has no content, remove it from cache
     const entry = entries.find(e => e.id === id)
     const isNew = entry && !entry.content && entry.title === 'Nova entrada'
     if (isNew) {
@@ -493,14 +594,35 @@ export function WikiPage() {
     setEditingId(null)
   }
 
-  // Import .md file
+  async function handleReorder(result: DropResult) {
+    if (!result.destination || result.source.index === result.destination.index) return
+
+    const reordered = [...sorted]
+    const [moved] = reordered.splice(result.source.index, 1)
+    reordered.splice(result.destination.index, 0, moved)
+
+    const withOrder = reordered.map((e, i) => ({ ...e, order: i }))
+    queryClient.setQueryData(['wiki'], withOrder)
+
+    const changed = withOrder.filter(e => {
+      const original = entries.find(x => x.id === e.id)
+      return original && original.order !== e.order
+    })
+
+    try {
+      await Promise.all(changed.map(e => saveWikiEntry(e)))
+    } catch {
+      toast({ title: 'Erro ao reordenar', variant: 'destructive' })
+      queryClient.setQueryData(['wiki'], entries)
+    }
+  }
+
   async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
     e.target.value = ''
     const text = await file.text()
     const now = new Date().toISOString()
-    // Try to extract title from first # heading
     const titleMatch = text.match(/^#\s+(.+)$/m)
     const title = titleMatch ? titleMatch[1].trim() : file.name.replace('.md', '')
     const content = titleMatch ? text.replace(titleMatch[0], '').trim() : text.trim()
@@ -533,7 +655,7 @@ export function WikiPage() {
 
   return (
     <div className="flex flex-col -mx-6 -mt-6 lg:-mx-8 lg:-mt-8 overflow-hidden h-[calc(100dvh-3.5rem)] lg:h-dvh">
-      {/* ── Mobile: back button when viewing entry ── */}
+      {/* Mobile: back button */}
       {showMobileEntry && (
         <div className="lg:hidden flex items-center gap-2 px-4 py-2 border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 flex-shrink-0">
           <button
@@ -549,7 +671,7 @@ export function WikiPage() {
         {/* ── Left: Entry list ── */}
         <aside className={`${showMobileEntry ? 'hidden' : 'flex'} lg:flex flex-col w-full lg:w-60 xl:w-72 border-r border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50 flex-shrink-0`}>
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
             <div className="flex items-center gap-2">
               <BookText className="w-4 h-4 text-amber-500 flex-shrink-0" />
               <span className="text-sm font-semibold text-gray-800 dark:text-gray-100">Wiki</span>
@@ -568,7 +690,7 @@ export function WikiPage() {
           </div>
 
           {/* Search */}
-          <div className="px-3 py-2 border-b border-gray-100 dark:border-gray-800">
+          <div className="px-3 py-2 border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
             <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
               <Search className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
               <input
@@ -585,50 +707,95 @@ export function WikiPage() {
             </div>
           </div>
 
-          {/* Entries */}
-          <nav className="flex-1 overflow-y-auto py-1">
-            {filtered.length === 0 ? (
-              <div className="text-center py-10 px-4">
-                <BookText className="w-8 h-8 text-gray-200 dark:text-gray-700 mx-auto mb-2" />
-                <p className="text-xs text-gray-400 dark:text-gray-600">
-                  {search ? 'Nenhum resultado' : 'Nenhuma entrada ainda'}
-                </p>
-                {!search && (
-                  <button onClick={handleNew} className="mt-3 flex items-center gap-1.5 text-xs text-amber-500 hover:text-amber-700 mx-auto">
-                    <Plus className="w-3.5 h-3.5" /> Criar primeira entrada
-                  </button>
+          {/* Entries: D&D when not searching, plain list when searching */}
+          {!search ? (
+            <DragDropContext onDragEnd={handleReorder}>
+              <Droppable droppableId="wiki-entries">
+                {provided => (
+                  <nav
+                    className="flex-1 overflow-y-auto py-1"
+                    ref={provided.innerRef}
+                    {...provided.droppableProps}
+                  >
+                    {sorted.length === 0 ? (
+                      <div className="text-center py-10 px-4">
+                        <BookText className="w-8 h-8 text-gray-200 dark:text-gray-700 mx-auto mb-2" />
+                        <p className="text-xs text-gray-400 dark:text-gray-600">Nenhuma entrada ainda</p>
+                        <button onClick={handleNew} className="mt-3 flex items-center gap-1.5 text-xs text-amber-500 hover:text-amber-700 mx-auto">
+                          <Plus className="w-3.5 h-3.5" /> Criar primeira entrada
+                        </button>
+                      </div>
+                    ) : (
+                      sorted.map((entry, index) => (
+                        <Draggable key={entry.id} draggableId={entry.id} index={index}>
+                          {(prov, snap) => (
+                            <div
+                              ref={prov.innerRef}
+                              {...prov.draggableProps}
+                              className={`flex items-center border-l-2 transition-colors ${
+                                selectedId === entry.id
+                                  ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/40'
+                                  : 'border-transparent hover:bg-white dark:hover:bg-gray-800/60'
+                              } ${snap.isDragging ? 'opacity-75 shadow-md rounded-r-lg' : ''}`}
+                            >
+                              <div
+                                {...prov.dragHandleProps}
+                                className="pl-2 pr-1 py-2.5 text-gray-300 hover:text-gray-400 cursor-grab active:cursor-grabbing flex-shrink-0 touch-none"
+                              >
+                                <GripVertical className="w-3.5 h-3.5" />
+                              </div>
+                              <button
+                                onClick={() => selectEntry(entry.id)}
+                                className="flex-1 text-left py-2.5 pr-4 min-w-0"
+                              >
+                                <p className={`text-sm font-medium truncate ${
+                                  selectedId === entry.id
+                                    ? 'text-amber-700 dark:text-amber-300'
+                                    : 'text-gray-700 dark:text-gray-300'
+                                }`}>
+                                  {entry.title}
+                                </p>
+                              </button>
+                            </div>
+                          )}
+                        </Draggable>
+                      ))
+                    )}
+                    {provided.placeholder}
+                  </nav>
                 )}
-              </div>
-            ) : (
-              filtered.map(entry => (
-                <button
-                  key={entry.id}
-                  onClick={() => selectEntry(entry.id)}
-                  className={`w-full text-left px-4 py-2.5 transition-colors ${
-                    selectedId === entry.id
-                      ? 'bg-amber-50 dark:bg-amber-950/40 border-l-2 border-amber-500'
-                      : 'hover:bg-white dark:hover:bg-gray-800/60 border-l-2 border-transparent'
-                  }`}
-                >
-                  <p className={`text-sm font-medium truncate ${
-                    selectedId === entry.id
-                      ? 'text-amber-700 dark:text-amber-300'
-                      : 'text-gray-700 dark:text-gray-300'
-                  }`}>
-                    {entry.title}
-                  </p>
-                  {entry.updated_at && (
-                    <p className="text-xs text-gray-400 dark:text-gray-600 mt-0.5">
-                      {new Date(entry.updated_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
+              </Droppable>
+            </DragDropContext>
+          ) : (
+            <nav className="flex-1 overflow-y-auto py-1">
+              {filtered.length === 0 ? (
+                <p className="text-center text-xs text-gray-400 dark:text-gray-600 py-10">Nenhum resultado</p>
+              ) : (
+                filtered.map(entry => (
+                  <button
+                    key={entry.id}
+                    onClick={() => selectEntry(entry.id)}
+                    className={`w-full text-left px-4 py-2.5 border-l-2 transition-colors ${
+                      selectedId === entry.id
+                        ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-500'
+                        : 'border-transparent hover:bg-white dark:hover:bg-gray-800/60'
+                    }`}
+                  >
+                    <p className={`text-sm font-medium truncate ${
+                      selectedId === entry.id
+                        ? 'text-amber-700 dark:text-amber-300'
+                        : 'text-gray-700 dark:text-gray-300'
+                    }`}>
+                      {entry.title}
                     </p>
-                  )}
-                </button>
-              ))
-            )}
-          </nav>
+                  </button>
+                ))
+              )}
+            </nav>
+          )}
 
           {/* Sidebar footer */}
-          <div className="px-4 py-3 border-t border-gray-100 dark:border-gray-800">
+          <div className="px-4 py-3 border-t border-gray-100 dark:border-gray-800 flex-shrink-0">
             <button onClick={handleNew}
               className="w-full flex items-center gap-2 text-xs text-gray-500 dark:text-gray-500 hover:text-amber-600 dark:hover:text-amber-400 transition-colors">
               <Plus className="w-3.5 h-3.5" /> Nova entrada
@@ -652,15 +819,7 @@ export function WikiPage() {
               onDelete={() => handleDelete(selected.id)}
             />
           ) : (
-            <div className="flex-1 flex flex-col items-center justify-center text-center px-8 py-16">
-              <BookText className="w-12 h-12 text-gray-200 dark:text-gray-700 mb-4" />
-              <p className="text-gray-400 dark:text-gray-500 text-sm mb-4">
-                Selecione uma entrada ou crie uma nova
-              </p>
-              <Button onClick={handleNew} className="bg-amber-500 hover:bg-amber-600 text-white">
-                <FilePlus className="w-4 h-4" /> Nova entrada
-              </Button>
-            </div>
+            <WikiToc entries={sorted} onSelectEntry={selectEntry} onNew={handleNew} />
           )}
         </main>
       </div>
