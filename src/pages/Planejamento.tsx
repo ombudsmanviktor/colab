@@ -198,31 +198,47 @@ function SpecialMeetingDialog({ onAdd, onClose }: { onAdd: (m: PlannedMeeting) =
   )
 }
 
-// ─── Reading form ─────────────────────────────────────────────────────────
+// ─── Reading form (add & edit) ────────────────────────────────────────────
 
-function ReadingForm({ onAdd, onClose }: { onAdd: (r: PlanReading) => void; onClose: () => void }) {
-  const [title, setTitle] = useState('')
-  const [authors, setAuthors] = useState('')
-  const [year, setYear] = useState('')
-  const [url, setUrl] = useState('')
-  const [notes, setNotes] = useState('')
+function ReadingForm({
+  initial, onSave, onClose,
+}: {
+  initial?: PlanReading
+  onSave: (r: PlanReading) => void
+  onClose: () => void
+}) {
+  const [title, setTitle] = useState(initial?.title ?? '')
+  const [authors, setAuthors] = useState(initial?.authors ?? '')
+  const [year, setYear] = useState(initial?.year ?? '')
+  const [url, setUrl] = useState(initial?.url ?? '')
+  const [notes, setNotes] = useState(initial?.notes ?? '')
+  const isEdit = !!initial
 
   function submit(e: React.FormEvent) {
     e.preventDefault()
     if (!title.trim()) return
-    onAdd({ id: generateId(), title: title.trim(), authors: authors.trim() || undefined, year: year.trim() || undefined, url: url.trim() || undefined, notes: notes.trim() || undefined })
+    onSave({
+      ...(initial ?? { id: generateId() }),
+      title: title.trim(),
+      authors: authors.trim() || undefined,
+      year: year.trim() || undefined,
+      url: url.trim() || undefined,
+      notes: notes.trim() || undefined,
+    })
     onClose()
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
       <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Adicionar leitura ao acervo</h2>
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+          {isEdit ? 'Editar leitura' : 'Adicionar leitura ao acervo'}
+        </h2>
         <form onSubmit={submit} className="space-y-3">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Título *</label>
             <input className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-              value={title} onChange={e => setTitle(e.target.value)} required />
+              value={title} onChange={e => setTitle(e.target.value)} required autoFocus />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -253,7 +269,7 @@ function ReadingForm({ onAdd, onClose }: { onAdd: (r: PlanReading) => void; onCl
             </button>
             <button type="submit"
               className="px-4 py-2 text-sm rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-medium transition-colors">
-              Adicionar
+              {isEdit ? 'Salvar' : 'Adicionar'}
             </button>
           </div>
         </form>
@@ -407,6 +423,7 @@ function PlanDetail({
 }) {
   const [showSpecialDialog, setShowSpecialDialog] = useState(false)
   const [showReadingForm, setShowReadingForm] = useState(false)
+  const [editingReading, setEditingReading] = useState<PlanReading | null>(null)
   const [editingPlan, setEditingPlan] = useState(false)
   const [processingMeetingId, setProcessingMeetingId] = useState<string | null>(null)
 
@@ -454,6 +471,10 @@ function PlanDetail({
 
   function addReading(r: PlanReading) {
     onUpdate({ ...plan, readings: [...plan.readings, r] })
+  }
+
+  function updateReading(r: PlanReading) {
+    onUpdate({ ...plan, readings: plan.readings.map(x => x.id === r.id ? r : x) })
   }
 
   function deleteReading(id: string) {
@@ -592,6 +613,10 @@ function PlanDetail({
                                 <p className="text-xs font-medium text-gray-800 dark:text-gray-200 leading-snug">{reading.title}</p>
                                 {reading.authors && <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 truncate">{reading.authors}{reading.year ? `, ${reading.year}` : ''}</p>}
                               </div>
+                              <button onClick={() => setEditingReading(reading)}
+                                className="shrink-0 text-gray-300 hover:text-amber-500 transition-colors">
+                                <Edit2 className="w-3 h-3" />
+                              </button>
                               <button onClick={() => deleteReading(reading.id)}
                                 className="shrink-0 text-gray-300 hover:text-red-500 transition-colors">
                                 <X className="w-3 h-3" />
@@ -612,7 +637,14 @@ function PlanDetail({
 
       {/* Dialogs */}
       {showSpecialDialog && <SpecialMeetingDialog onAdd={addSpecialMeeting} onClose={() => setShowSpecialDialog(false)} />}
-      {showReadingForm && <ReadingForm onAdd={addReading} onClose={() => setShowReadingForm(false)} />}
+      {showReadingForm && <ReadingForm onSave={addReading} onClose={() => setShowReadingForm(false)} />}
+      {editingReading && (
+        <ReadingForm
+          initial={editingReading}
+          onSave={r => { updateReading(r); setEditingReading(null) }}
+          onClose={() => setEditingReading(null)}
+        />
+      )}
       {editingPlan && (
         <PlanFormDialog
           initial={plan}
