@@ -24,13 +24,6 @@ const NAV_ITEMS = [
     iconClass: 'text-amber-500',
   },
   {
-    to: '/app/atas-e-decisoes',
-    label: 'Atas e Decisões',
-    icon: FileText,
-    activeClass: 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300',
-    iconClass: 'text-amber-600',
-  },
-  {
     to: '/app/planejamento',
     label: 'Próximas Reuniões',
     icon: Calendar,
@@ -38,9 +31,9 @@ const NAV_ITEMS = [
     iconClass: 'text-amber-500',
   },
   {
-    to: '/app/sugestoes',
-    label: 'Bate-Papo e Sugestões',
-    icon: MessageSquare,
+    to: '/app/atas-e-decisoes',
+    label: 'Atas e Decisões',
+    icon: FileText,
     activeClass: 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300',
     iconClass: 'text-amber-600',
   },
@@ -57,6 +50,13 @@ const NAV_ITEMS = [
     icon: BookMarked,
     activeClass: 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300',
     iconClass: 'text-amber-500',
+  },
+  {
+    to: '/app/sugestoes',
+    label: 'Bate-Papo e Sugestões',
+    icon: MessageSquare,
+    activeClass: 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300',
+    iconClass: 'text-amber-600',
   },
   {
     to: '/app/linha-do-tempo',
