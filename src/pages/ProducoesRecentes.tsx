@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   BookMarked, Plus, Download, Trash2, Mail, Edit2, X, Upload, FileText,
@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { useToast } from '@/hooks/useToast'
 import { ToastContainer } from '@/components/ui/toast'
+import { useFileDrop } from '@/hooks/useFileDrop'
 import type { Producao } from '@/types'
 
 // ─── Bibliography formatter ────────────────────────────────────────────────
@@ -130,9 +131,10 @@ function groupByDate(producoes: Producao[]): Record<string, Producao[]> {
 // ─── Upload Dialog ─────────────────────────────────────────────────────────
 
 function UploadDialog({
-  open, onClose, onSave,
+  open, onClose, onSave, initialFile,
 }: {
   open: boolean; onClose: () => void; onSave: (p: Producao) => Promise<void>
+  initialFile?: File
 }) {
   const { session } = useAuth()
   const [title, setTitle] = useState('')
@@ -147,17 +149,17 @@ function UploadDialog({
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+  const didProcess = useRef(false)
 
   function reset() {
     setTitle(''); setAuthors(''); setYear(''); setSource('')
     setMeetingDate(''); setNotes(''); setUrl('')
     setPdfBase64(undefined); setPdfName(undefined)
     setLoading(false); setSaving(false)
+    didProcess.current = false
   }
 
-  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
+  async function processFile(file: File) {
     setLoading(true)
     setPdfName(file.name)
     try {
@@ -167,7 +169,6 @@ function UploadDialog({
       if (meta.authors?.length) setAuthors(meta.authors.join('; '))
       if (meta.year) setYear(meta.year)
       if (meta.source) setSource(meta.source)
-
       const bytes = new Uint8Array(buffer)
       const binStr = Array.from(bytes, b => String.fromCodePoint(b)).join('')
       setPdfBase64(btoa(binStr))
@@ -176,6 +177,19 @@ function UploadDialog({
     } finally {
       setLoading(false)
     }
+  }
+
+  useEffect(() => {
+    if (!open) { didProcess.current = false; return }
+    if (initialFile && !didProcess.current) {
+      didProcess.current = true
+      processFile(initialFile)
+    }
+  }, [open, initialFile]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (file) processFile(file)
   }
 
   async function handleSave() {
@@ -427,11 +441,17 @@ export function ProducoesRecentes() {
   const queryClient = useQueryClient()
   const { toasts, toast, dismiss } = useToast()
   const [uploadOpen, setUploadOpen] = useState(false)
+  const [dropFile, setDropFile] = useState<File | null>(null)
   const [editProducao, setEditProducao] = useState<Producao | null>(null)
   const [exportOpen, setExportOpen] = useState(false)
   const exportRef = useRef<HTMLDivElement>(null)
   const [filterStart, setFilterStart] = useState('')
   const [filterEnd, setFilterEnd] = useState('')
+
+  const isDragging = useFileDrop((file) => {
+    setDropFile(file)
+    setUploadOpen(true)
+  })
 
   const { data: producoes = [], isLoading } = useQuery({
     queryKey: ['producoes'],
@@ -573,11 +593,29 @@ export function ProducoesRecentes() {
         </div>
       )}
 
-      <UploadDialog open={uploadOpen} onClose={() => setUploadOpen(false)} onSave={handleSave} />
+      <UploadDialog
+        open={uploadOpen}
+        onClose={() => { setUploadOpen(false); setDropFile(null) }}
+        onSave={handleSave}
+        initialFile={dropFile ?? undefined}
+      />
       {editProducao && (
         <EditDialog producao={editProducao} onClose={() => setEditProducao(null)} onSave={handleSave} />
       )}
       <ToastContainer toasts={toasts} onDismiss={dismiss} />
+
+      {/* Full-page drop overlay */}
+      <div
+        className={`fixed inset-4 z-50 flex flex-col items-center justify-center rounded-2xl border-2 border-dashed transition-all duration-200 pointer-events-none ${
+          isDragging
+            ? 'border-amber-400 dark:border-amber-500 bg-amber-50/80 dark:bg-amber-950/50 opacity-100'
+            : 'border-transparent opacity-0'
+        }`}
+      >
+        <Upload className="w-12 h-12 text-amber-400 dark:text-amber-500 mb-3" />
+        <p className="text-base font-semibold text-amber-700 dark:text-amber-300">Soltar para adicionar</p>
+        <p className="text-sm text-amber-500 dark:text-amber-400 mt-1">O PDF será lido automaticamente</p>
+      </div>
     </div>
   )
 }
