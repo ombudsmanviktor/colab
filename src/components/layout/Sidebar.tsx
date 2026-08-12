@@ -32,7 +32,7 @@ const NAV_ITEMS = [
   },
   {
     to: '/app/planejamento',
-    label: 'Planejamento das Reuniões',
+    label: 'Próximas Reuniões',
     icon: Calendar,
     activeClass: 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300',
     iconClass: 'text-amber-500',

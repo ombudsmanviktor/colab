@@ -1,15 +1,25 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { DragDropContext, Droppable, Draggable, type DropResult, type DraggableProvided } from '@hello-pangea/dnd'
 import {
   Plus, Calendar, Archive, ChevronDown, ChevronRight, Trash2,
-  GripVertical, BookOpen, X, Edit2, Star,
+  GripVertical, BookOpen, X, Edit2, Star, Upload,
 } from 'lucide-react'
 import { useToast } from '@/hooks/useToast'
 import { ToastContainer } from '@/components/ui/toast'
 import { loadMeetingPlans, saveMeetingPlan, deleteMeetingPlan, generateId } from '@/lib/storage'
+import { extractPdfMetadata } from '@/lib/pdfExtract'
 import type { MeetingPlan, PlannedMeeting, PlanReading } from '@/types'
 import { useAuth } from '@/contexts/AuthContext'
+
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = e => resolve(e.target?.result as string)
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
 
 // ─── Date helpers ─────────────────────────────────────────────────────────
 
@@ -263,15 +273,61 @@ function MeetingCard({
   onDescChange: (desc: string) => void
   onRemoveReading: () => void
   onDeleteMeeting: () => void
+  onFileDrop: (file: File) => void
+  isProcessing?: boolean
 }) {
   const assignedReading = readings.find(r => r.id === meeting.readingId)
   const isPast = meeting.date < isoToday()
+  const [fileDragOver, setFileDragOver] = useState(false)
+  const dragCounter = useRef(0)
+
+  function isFileDrag(e: React.DragEvent) {
+    return Array.from(e.dataTransfer.types).includes('Files')
+  }
+
+  function handleDragEnter(e: React.DragEvent) {
+    if (!isFileDrag(e)) return
+    e.preventDefault()
+    dragCounter.current++
+    setFileDragOver(true)
+  }
+
+  function handleDragLeave(e: React.DragEvent) {
+    if (!isFileDrag(e)) return
+    dragCounter.current--
+    if (dragCounter.current <= 0) { dragCounter.current = 0; setFileDragOver(false) }
+  }
+
+  function handleDragOver(e: React.DragEvent) {
+    if (!isFileDrag(e)) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'copy'
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    if (!isFileDrag(e)) return
+    e.preventDefault()
+    dragCounter.current = 0
+    setFileDragOver(false)
+    const file = e.dataTransfer.files[0]
+    if (file) onFileDrop(file)
+  }
 
   return (
     <div
       ref={provided.innerRef}
       {...provided.draggableProps}
-      className={`rounded-xl border p-4 mb-3 bg-white dark:bg-gray-900 ${meeting.isSpecial ? 'border-amber-300 dark:border-amber-700' : 'border-gray-200 dark:border-gray-700'} ${isPast ? 'opacity-60' : ''}`}
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+      className={`rounded-xl border p-4 mb-3 bg-white dark:bg-gray-900 transition-all ${
+        fileDragOver
+          ? 'border-amber-400 dark:border-amber-500 ring-2 ring-amber-300 dark:ring-amber-700 shadow-lg'
+          : meeting.isSpecial
+          ? 'border-amber-300 dark:border-amber-700'
+          : 'border-gray-200 dark:border-gray-700'
+      } ${isPast && !fileDragOver ? 'opacity-60' : ''}`}
     >
       <div className="flex items-start gap-2">
         <div className="flex flex-col items-center pt-0.5 min-w-[40px]">
@@ -280,45 +336,46 @@ function MeetingCard({
           {meeting.isSpecial && <Star className="w-3 h-3 text-amber-500 mt-1" />}
         </div>
         <div className="flex-1 min-w-0">
-          {/* Description */}
           <input
             className="w-full text-sm bg-transparent border-none outline-none text-gray-700 dark:text-gray-300 placeholder-gray-400 dark:placeholder-gray-600"
             value={meeting.description ?? ''}
             onChange={e => onDescChange(e.target.value)}
             placeholder="Descrição / motivação do encontro…"
           />
-          {/* Assigned reading drop zone */}
-          <Droppable droppableId={`meeting-${meeting.id}`} type="reading">
-            {(dropProvided, snapshot) => (
-              <div
-                ref={dropProvided.innerRef}
-                {...dropProvided.droppableProps}
-                className={`mt-2 rounded-lg min-h-[2rem] transition-colors ${
-                  assignedReading
-                    ? 'bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-3 py-2'
-                    : snapshot.isDraggingOver
-                    ? 'bg-amber-50 dark:bg-amber-950/30 border-2 border-dashed border-amber-400 px-3 py-2'
-                    : 'border-2 border-dashed border-gray-200 dark:border-gray-700 px-3 py-1'
-                }`}
-              >
-                {assignedReading ? (
-                  <div className="flex items-start gap-2">
-                    <BookOpen className="w-3.5 h-3.5 text-amber-600 mt-0.5 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium text-amber-800 dark:text-amber-300 truncate">{assignedReading.title}</p>
-                      {assignedReading.authors && <p className="text-[10px] text-amber-600 dark:text-amber-400 truncate">{assignedReading.authors}{assignedReading.year ? `, ${assignedReading.year}` : ''}</p>}
-                    </div>
-                    <button onClick={onRemoveReading} className="shrink-0 text-amber-400 hover:text-amber-600 transition-colors">
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ) : (
-                  <p className="text-[11px] text-gray-400 dark:text-gray-600 text-center">Arraste uma leitura aqui</p>
+          {/* Reading slot */}
+          {assignedReading ? (
+            <div className="mt-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-3 py-2 flex items-start gap-2">
+              <BookOpen className="w-3.5 h-3.5 text-amber-600 mt-0.5 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-amber-800 dark:text-amber-300 truncate">{assignedReading.title}</p>
+                {assignedReading.authors && (
+                  <p className="text-[10px] text-amber-600 dark:text-amber-400 truncate">
+                    {assignedReading.authors}{assignedReading.year ? `, ${assignedReading.year}` : ''}
+                  </p>
                 )}
-                {dropProvided.placeholder}
               </div>
-            )}
-          </Droppable>
+              <button onClick={onRemoveReading} className="shrink-0 text-amber-400 hover:text-amber-600 transition-colors">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ) : (
+            <div className={`mt-2 rounded-lg border-2 border-dashed px-3 py-2 flex items-center justify-center gap-2 transition-colors ${
+              fileDragOver
+                ? 'border-amber-400 bg-amber-50 dark:bg-amber-950/40'
+                : 'border-gray-200 dark:border-gray-700'
+            }`}>
+              {isProcessing ? (
+                <p className="text-[11px] text-amber-600 dark:text-amber-400">Extraindo metadados…</p>
+              ) : fileDragOver ? (
+                <>
+                  <Upload className="w-3 h-3 text-amber-500" />
+                  <p className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">Solte para importar</p>
+                </>
+              ) : (
+                <p className="text-[11px] text-gray-400 dark:text-gray-600">Arraste um arquivo aqui</p>
+              )}
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-1 shrink-0">
           {meeting.isSpecial && (
@@ -351,11 +408,36 @@ function PlanDetail({
   const [showSpecialDialog, setShowSpecialDialog] = useState(false)
   const [showReadingForm, setShowReadingForm] = useState(false)
   const [editingPlan, setEditingPlan] = useState(false)
+  const [processingMeetingId, setProcessingMeetingId] = useState<string | null>(null)
 
   const sortedMeetings = useMemo(() => sortMeetings(plan.meetings), [plan.meetings])
 
   function updateMeetingDesc(id: string, desc: string) {
     onUpdate({ ...plan, meetings: plan.meetings.map(m => m.id === id ? { ...m, description: desc } : m) })
+  }
+
+  async function handleFileDrop(meetingId: string, file: File) {
+    setProcessingMeetingId(meetingId)
+    try {
+      const buffer = await file.arrayBuffer()
+      const meta = await extractPdfMetadata(buffer)
+      const dataUrl = await fileToDataUrl(file)
+      const reading: PlanReading = {
+        id: generateId(),
+        title: meta.title && meta.title !== 'Título não identificado' ? meta.title : file.name.replace(/\.pdf$/i, ''),
+        authors: (meta.authors ?? []).join('; ') || undefined,
+        year: meta.year,
+        pdfBase64: dataUrl,
+        pdfName: file.name,
+      }
+      onUpdate({
+        ...plan,
+        readings: [...plan.readings, reading],
+        meetings: plan.meetings.map(m => m.id === meetingId ? { ...m, readingId: reading.id } : m),
+      })
+    } finally {
+      setProcessingMeetingId(null)
+    }
   }
 
   function removeReadingFromMeeting(meetingId: string) {
@@ -464,6 +546,8 @@ function PlanDetail({
                           onDescChange={desc => updateMeetingDesc(meeting.id, desc)}
                           onRemoveReading={() => removeReadingFromMeeting(meeting.id)}
                           onDeleteMeeting={() => deleteSpecialMeeting(meeting.id)}
+                          onFileDrop={file => handleFileDrop(meeting.id, file)}
+                          isProcessing={processingMeetingId === meeting.id}
                         />
                       )}
                     </Draggable>
