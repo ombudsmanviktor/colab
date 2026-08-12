@@ -1,6 +1,6 @@
 // ─── In-memory demo store ──────────────────────────────────────────────────
 
-import type { UsersIndex, UserTasks, UserProfile, OrdemDoDia, AtaDecisao, Leitura, Producao, SugestaoMessage, Orientacao, TarefaOrientacao, TimelineData, TimelineEvent, TimelineCategory, CalloutData } from '@/types'
+import type { UsersIndex, UserTasks, UserProfile, OrdemDoDia, AtaDecisao, Leitura, Producao, SugestaoMessage, Orientacao, TarefaOrientacao, TimelineData, TimelineEvent, TimelineCategory, CalloutData, WikiEntry } from '@/types'
 
 export const DEMO_EMAIL = 'demo@colab.app'
 export const DEMO_EMAIL2 = 'ana@grupo.edu.br'
@@ -319,6 +319,57 @@ const DEMO_TIMELINE_EVENTS: TimelineEvent[] = [
   },
 ]
 
+const DEMO_WIKI: WikiEntry[] = [
+  {
+    id: 'wiki-sobre',
+    title: 'Sobre o coLAB',
+    order: 0,
+    created_at: NOW,
+    updated_at: NOW,
+    created_by: DEMO_EMAIL,
+    updated_by: DEMO_EMAIL,
+    content: `## Sobre o coLAB
+
+O **coLAB** é um grupo de pesquisa vinculado à Universidade Federal Fluminense (UFF), dedicado ao estudo de comunicação, laboratório e metodologias colaborativas.
+
+### Objetivos
+
+- Desenvolver pesquisas sobre comunicação e tecnologia
+- Promover encontros e seminários acadêmicos
+- Publicar resultados em periódicos indexados
+
+---
+
+> "A pesquisa colaborativa começa com a escuta ativa."
+
+Para dúvidas, contate o coordenador do grupo.`,
+  },
+  {
+    id: 'wiki-regras',
+    title: 'Regras de funcionamento',
+    order: 1,
+    created_at: NOW,
+    updated_at: NOW,
+    created_by: DEMO_EMAIL,
+    updated_by: DEMO_EMAIL,
+    content: `## Regras de funcionamento
+
+### Reuniões
+
+As reuniões ordinárias acontecem **quinzenalmente**, às sextas-feiras, das 14h às 16h.
+
+### Comunicação
+
+1. Usar o canal oficial do grupo para comunicações formais
+2. Respostas em até **48 horas**
+3. Documentar decisões nas atas
+
+### Produções
+
+Toda produção acadêmica deve ser registrada no módulo **Produções Recentes** do coLAB.`,
+  },
+]
+
 const DEMO_CALLOUT: CalloutData = { content: '', updated_at: NOW, updated_by: '' }
 
 // ─── Mutable store ─────────────────────────────────────────────────────────
@@ -336,6 +387,7 @@ interface DemoStore {
   tarefasOrientacao: TarefaOrientacao[]
   timeline: TimelineData
   callout: CalloutData
+  wiki: WikiEntry[]
 }
 
 function buildStore(): DemoStore {
@@ -352,6 +404,7 @@ function buildStore(): DemoStore {
     tarefasOrientacao: JSON.parse(JSON.stringify(DEMO_TAREFAS_ORIENTACAO)),
     timeline: JSON.parse(JSON.stringify({ events: DEMO_TIMELINE_EVENTS, categories: DEMO_TIMELINE_CATEGORIES })),
     callout: JSON.parse(JSON.stringify(DEMO_CALLOUT)),
+    wiki: JSON.parse(JSON.stringify(DEMO_WIKI)),
   }
 }
 
@@ -454,3 +507,11 @@ export function demoSaveTimeline(data: TimelineData): void {
 
 export function demoLoadCallout(): CalloutData { return JSON.parse(JSON.stringify(_store.callout)) }
 export function demoSaveCallout(c: CalloutData): void { _store.callout = JSON.parse(JSON.stringify(c)) }
+
+export function demoLoadWikiEntries(): WikiEntry[] { return JSON.parse(JSON.stringify(_store.wiki)) }
+export function demoSaveWikiEntry(e: WikiEntry): void {
+  const idx = _store.wiki.findIndex(x => x.id === e.id)
+  if (idx >= 0) _store.wiki[idx] = JSON.parse(JSON.stringify(e))
+  else _store.wiki.push(JSON.parse(JSON.stringify(e)))
+}
+export function demoDeleteWikiEntry(id: string): void { _store.wiki = _store.wiki.filter(x => x.id !== id) }

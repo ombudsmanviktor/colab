@@ -176,6 +176,19 @@ export interface TimelineData {
   categories: TimelineCategory[]
 }
 
+// ─── Wiki ─────────────────────────────────────────────────────────────────
+
+export interface WikiEntry {
+  id: string
+  title: string
+  content: string
+  created_at: string
+  updated_at: string
+  created_by: string
+  updated_by: string
+  order: number
+}
+
 // ─── Callout (recado geral) ───────────────────────────────────────────────
 
 export interface CalloutData {

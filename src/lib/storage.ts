@@ -12,7 +12,7 @@ import {
   getRawUrl,
   type GitHubConfig,
 } from './github'
-import type { UsersIndex, UserTasks, UserProfile, OrdemDoDia, AtaDecisao, Leitura, Producao, SugestaoMessage, Orientacao, TarefaOrientacao, Anexo, TimelineData, CalloutData } from '@/types'
+import type { UsersIndex, UserTasks, UserProfile, OrdemDoDia, AtaDecisao, Leitura, Producao, SugestaoMessage, Orientacao, TarefaOrientacao, Anexo, TimelineData, CalloutData, WikiEntry } from '@/types'
 import type { AppRepoConfig } from '@/lib/appConfig'
 import { emailSlug, generateId } from './utils'
 import {
@@ -28,6 +28,7 @@ import {
   demoLoadOrientacoes, demoSaveOrientacao, demoDeleteOrientacao,
   demoLoadTimeline, demoSaveTimeline,
   demoLoadCallout, demoSaveCallout,
+  demoLoadWikiEntries, demoSaveWikiEntry, demoDeleteWikiEntry,
 } from './demoStore'
 
 // ─── SHA cache ────────────────────────────────────────────────────────────
@@ -471,6 +472,117 @@ export async function loadCallout(): Promise<CalloutData> {
 export async function saveCallout(data: CalloutData): Promise<void> {
   if (isDemoMode()) { demoSaveCallout(data); return }
   await writeYaml(CALLOUT_PATH, data, 'Update callout')
+}
+
+// ─── Wiki ─────────────────────────────────────────────────────────────────
+
+const WIKI_DIR = 'wiki'
+
+// Write raw text through the same write queue used by writeYaml
+async function writeRawText(path: string, text: string, message: string): Promise<void> {
+  const prev = writeQueue.get(path) ?? Promise.resolve()
+  const next = prev.then(() => _doWriteRaw(path, text, message))
+  writeQueue.set(path, next.catch(() => {}))
+  return next
+}
+
+async function _doWriteRaw(path: string, text: string, message: string): Promise<void> {
+  const MAX = 5
+  for (let attempt = 0; attempt < MAX; attempt++) {
+    try {
+      const current = await readFile(cfg(), path, true)
+      shaCache.set(path, current.sha)
+    } catch { shaCache.delete(path) }
+    try {
+      const sha = shaCache.get(path)
+      const res = await writeTextFile(cfg(), path, text, message, sha)
+      shaCache.set(path, res.content.sha)
+      return
+    } catch (err: unknown) {
+      if (attempt < MAX - 1) await new Promise(r => setTimeout(r, 150 * (attempt + 1)))
+      else throw err
+    }
+  }
+}
+
+function parseWikiMd(text: string, fallbackId: string): WikiEntry {
+  const match = text.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/)
+  if (match) {
+    try {
+      const meta = yaml.load(match[1]) as Record<string, unknown>
+      return {
+        id: String(meta.id ?? fallbackId),
+        title: String(meta.title ?? 'Sem título'),
+        order: Number(meta.order ?? 0),
+        created_at: String(meta.created_at ?? ''),
+        updated_at: String(meta.updated_at ?? ''),
+        created_by: String(meta.created_by ?? ''),
+        updated_by: String(meta.updated_by ?? ''),
+        content: match[2].trim(),
+      }
+    } catch { /* fall through */ }
+  }
+  return {
+    id: fallbackId,
+    title: 'Sem título',
+    order: 0,
+    created_at: '',
+    updated_at: '',
+    created_by: '',
+    updated_by: '',
+    content: text.trim(),
+  }
+}
+
+function serializeWikiMd(entry: WikiEntry): string {
+  const { content, ...meta } = entry
+  return `---\n${yaml.dump(meta, { lineWidth: -1 }).trim()}\n---\n\n${content}`
+}
+
+export async function loadWikiEntries(): Promise<WikiEntry[]> {
+  if (isDemoMode()) return demoLoadWikiEntries()
+  try {
+    const entries = await listDirectory(cfg(), WIKI_DIR)
+    const files = entries.filter(e => e.type === 'file' && e.name.endsWith('.md'))
+    const results = await Promise.all(
+      files.map(async f => {
+        const file = await readFile(cfg(), `${WIKI_DIR}/${f.name}`)
+        shaCache.set(`${WIKI_DIR}/${f.name}`, file.sha)
+        return parseWikiMd(decodeContent(file.content), f.name.replace('.md', ''))
+      })
+    )
+    return results.sort((a, b) => a.order - b.order || a.title.localeCompare(b.title, 'pt-BR'))
+  } catch {
+    return []
+  }
+}
+
+export async function saveWikiEntry(entry: WikiEntry): Promise<void> {
+  if (isDemoMode()) { demoSaveWikiEntry(entry); return }
+  await writeRawText(`${WIKI_DIR}/${entry.id}.md`, serializeWikiMd(entry), `Wiki: ${entry.title}`)
+}
+
+export async function deleteWikiEntry(id: string): Promise<void> {
+  if (isDemoMode()) { demoDeleteWikiEntry(id); return }
+  await removeYaml(`${WIKI_DIR}/${id}.md`, `Delete wiki entry ${id}`)
+}
+
+export async function uploadWikiImage(file: File): Promise<string> {
+  if (isDemoMode()) {
+    return new Promise(resolve => {
+      const reader = new FileReader()
+      reader.onload = e => resolve(e.target?.result as string)
+      reader.readAsDataURL(file)
+    })
+  }
+  const c = cfg()
+  const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+  const path = `${WIKI_DIR}/images/${Date.now()}-${safe}`
+  let existingSha: string | undefined
+  try { const f = await readFile(c, path); existingSha = f.sha } catch { /* new */ }
+  const result = await writeBinaryFile(c, path, file, `Wiki image: ${file.name}`, existingSha)
+  shaCache.set(path, result.content.sha)
+  return getRawUrl(c, path)
 }
 
 // ─── App config (users/app-config.yaml in data repo) ─────────────────────

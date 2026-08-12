@@ -16,6 +16,7 @@ import { Settings } from '@/pages/Settings'
 import { OrientacoesPage } from '@/pages/Orientacoes'
 import { LinhaDoTempoPage } from '@/pages/LinhaDoTempo'
 import { ProducoesRecentes } from '@/pages/ProducoesRecentes'
+import { WikiPage } from '@/pages/Wiki'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -53,6 +54,7 @@ export default function App() {
                 <Route path="orientacoes" element={<OrientacoesPage />} />
                 <Route path="producoes-recentes" element={<ProducoesRecentes />} />
                 <Route path="linha-do-tempo" element={<LinhaDoTempoPage />} />
+                <Route path="wiki" element={<WikiPage />} />
                 <Route path="settings" element={<Settings />} />
               </Route>
               <Route path="/" element={<Navigate to="/app/visao-geral" replace />} />
