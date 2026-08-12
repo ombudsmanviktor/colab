@@ -169,3 +169,24 @@ export async function testConnection(
 export async function getAuthenticatedUser(cfg: GitHubConfig): Promise<{ login: string }> {
   return ghFetch<{ login: string }>(cfg, '/user')
 }
+
+// ─── Commit history ───────────────────────────────────────────────────────
+
+export interface GHCommit {
+  sha: string
+  commit: { message: string; author: { name: string; date: string } }
+}
+
+export async function getFileCommits(cfg: GitHubConfig, filePath: string): Promise<GHCommit[]> {
+  return ghFetch<GHCommit[]>(
+    cfg,
+    `/repos/${cfg.owner}/${cfg.repo}/commits?path=${encodeURIComponent(filePath)}&sha=${cfg.branch}&per_page=30`
+  )
+}
+
+export async function getFileAtCommit(cfg: GitHubConfig, filePath: string, sha: string): Promise<GHFileContent> {
+  return ghFetch<GHFileContent>(
+    cfg,
+    `/repos/${cfg.owner}/${cfg.repo}/contents/${filePath}?ref=${sha}`
+  )
+}

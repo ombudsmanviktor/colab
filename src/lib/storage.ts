@@ -10,6 +10,8 @@ import {
   listDirectory,
   decodeContent,
   getRawUrl,
+  getFileCommits,
+  getFileAtCommit,
   type GitHubConfig,
 } from './github'
 import type { UsersIndex, UserTasks, UserProfile, OrdemDoDia, AtaDecisao, Leitura, Producao, SugestaoMessage, Orientacao, TarefaOrientacao, Anexo, TimelineData, CalloutData, WikiEntry } from '@/types'
@@ -565,6 +567,37 @@ export async function saveWikiEntry(entry: WikiEntry): Promise<void> {
 export async function deleteWikiEntry(id: string): Promise<void> {
   if (isDemoMode()) { demoDeleteWikiEntry(id); return }
   await removeYaml(`${WIKI_DIR}/${id}.md`, `Delete wiki entry ${id}`)
+}
+
+export interface WikiHistoryItem {
+  sha: string
+  shortSha: string
+  date: string
+  author: string
+}
+
+export async function getWikiEntryHistory(id: string): Promise<WikiHistoryItem[]> {
+  if (isDemoMode()) return []
+  try {
+    const commits = await getFileCommits(cfg(), `${WIKI_DIR}/${id}.md`)
+    return commits.map(c => ({
+      sha: c.sha,
+      shortSha: c.sha.slice(0, 7),
+      date: c.commit.author.date,
+      author: c.commit.author.name,
+    }))
+  } catch {
+    return []
+  }
+}
+
+export async function getWikiEntryAtVersion(id: string, sha: string): Promise<WikiEntry | null> {
+  try {
+    const file = await getFileAtCommit(cfg(), `${WIKI_DIR}/${id}.md`, sha)
+    return parseWikiMd(decodeContent(file.content), id)
+  } catch {
+    return null
+  }
 }
 
 // Target ≤ 500 KB binary so the base64 data URI (~667 KB) fits comfortably

@@ -4,13 +4,14 @@ import {
   BookText, Plus, Trash2, Edit2, X, Link2, ImagePlus,
   Bold, Italic, Strikethrough, Heading1, Heading2, Heading3,
   List, ListOrdered, Quote, Code, Minus, Download, Upload,
-  Search, ChevronLeft, FilePlus, GripVertical,
+  Search, ChevronLeft, FilePlus, GripVertical, History,
 } from 'lucide-react'
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useAuth } from '@/contexts/AuthContext'
-import { loadWikiEntries, saveWikiEntry, deleteWikiEntry, uploadWikiImage, generateId } from '@/lib/storage'
+import { loadWikiEntries, saveWikiEntry, deleteWikiEntry, uploadWikiImage, generateId, getWikiEntryHistory, getWikiEntryAtVersion, type WikiHistoryItem } from '@/lib/storage'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -493,13 +494,175 @@ function WikiEditor({ entry, onSave, onCancel, isNew }: {
   )
 }
 
+// ─── History Dialog ───────────────────────────────────────────────────────
+
+function fmtDate(iso: string): string {
+  try {
+    return new Intl.DateTimeFormat('pt-BR', {
+      day: '2-digit', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    }).format(new Date(iso))
+  } catch { return iso }
+}
+
+function HistoryDialog({ entry, onClose, onRestored }: {
+  entry: WikiEntry
+  onClose: () => void
+  onRestored: (updated: WikiEntry) => void
+}) {
+  const { session } = useAuth()
+  const { toast } = useToast()
+  const [selectedSha, setSelectedSha] = useState<string | null>(null)
+  const [preview, setPreview] = useState<WikiEntry | null>(null)
+  const [loadingPreview, setLoadingPreview] = useState(false)
+  const [restoring, setRestoring] = useState(false)
+
+  const { data: history = [], isLoading } = useQuery({
+    queryKey: ['wiki-history', entry.id],
+    queryFn: () => getWikiEntryHistory(entry.id),
+    staleTime: 0,
+  })
+
+  async function selectVersion(item: WikiHistoryItem) {
+    if (item.sha === selectedSha) return
+    setSelectedSha(item.sha)
+    setLoadingPreview(true)
+    setPreview(null)
+    try {
+      const old = await getWikiEntryAtVersion(entry.id, item.sha)
+      setPreview(old)
+    } catch {
+      toast({ title: 'Erro ao carregar versão', variant: 'destructive' })
+    } finally {
+      setLoadingPreview(false)
+    }
+  }
+
+  async function handleRestore() {
+    if (!preview) return
+    setRestoring(true)
+    try {
+      const restored: WikiEntry = {
+        ...entry,
+        title: preview.title,
+        content: preview.content,
+        updated_at: new Date().toISOString(),
+        updated_by: session?.email ?? '',
+      }
+      await saveWikiEntry(restored)
+      onRestored(restored)
+    } catch {
+      toast({ title: 'Erro ao restaurar versão', variant: 'destructive' })
+      setRestoring(false)
+    }
+  }
+
+  const isCurrentIdx = history.findIndex(h => h.sha === selectedSha)
+
+  return (
+    <Dialog open onOpenChange={open => { if (!open) onClose() }}>
+      <DialogContent className="max-w-3xl h-[80vh] flex flex-col p-0 gap-0 overflow-hidden dark:bg-gray-900 dark:border-gray-800">
+        <DialogHeader className="px-5 pt-5 pb-3 border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
+          <DialogTitle className="text-base font-semibold dark:text-white flex items-center gap-2">
+            <History className="w-4 h-4 text-amber-500" />
+            Histórico · <span className="font-normal text-gray-500 dark:text-gray-400">{entry.title}</span>
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="flex flex-1 min-h-0">
+          {/* Version list */}
+          <div className="w-64 flex-shrink-0 border-r border-gray-100 dark:border-gray-800 overflow-y-auto">
+            {isLoading ? (
+              <div className="flex justify-center py-10">
+                <div className="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : history.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-10 px-4 leading-relaxed">
+                Nenhuma versão anterior encontrada
+              </p>
+            ) : (
+              <ul className="py-1">
+                {history.map((item, idx) => (
+                  <li key={item.sha}>
+                    <button
+                      onClick={() => selectVersion(item)}
+                      className={`w-full text-left px-4 py-3 transition-colors border-l-2 ${
+                        selectedSha === item.sha
+                          ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/40'
+                          : 'border-transparent hover:bg-gray-50 dark:hover:bg-gray-800/50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <code className="text-[11px] text-gray-400">{item.shortSha}</code>
+                        {idx === 0 && (
+                          <span className="text-[10px] px-1.5 py-px rounded-full bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-400 font-medium leading-tight">
+                            atual
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-600 dark:text-gray-300 truncate">{item.author}</p>
+                      <p className="text-[11px] text-gray-400 mt-0.5">{fmtDate(item.date)}</p>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {/* Preview panel */}
+          <div className="flex-1 flex flex-col min-w-0">
+            {!selectedSha ? (
+              <div className="flex items-center justify-center h-full text-sm text-gray-400">
+                Selecione uma versão para visualizar
+              </div>
+            ) : loadingPreview ? (
+              <div className="flex justify-center items-center h-full">
+                <div className="w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : preview ? (
+              <>
+                <div className="flex-1 overflow-y-auto px-6 py-5">
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">{preview.title}</h2>
+                  {preview.content ? (
+                    <div className={PROSE_CLS}>
+                      <ReactMarkdown remarkPlugins={[remarkGfm]} urlTransform={safeUrl}>
+                        {preview.content}
+                      </ReactMarkdown>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-400 italic">Sem conteúdo nesta versão.</p>
+                  )}
+                </div>
+                {isCurrentIdx !== 0 && (
+                  <div className="flex-shrink-0 flex justify-end border-t border-gray-100 dark:border-gray-800 px-6 py-3">
+                    <Button
+                      onClick={handleRestore}
+                      disabled={restoring}
+                      className="bg-amber-500 hover:bg-amber-600 text-white text-sm"
+                    >
+                      {restoring ? 'Restaurando…' : 'Restaurar esta versão'}
+                    </Button>
+                  </div>
+                )}
+              </>
+            ) : null}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 // ─── Wiki Viewer ──────────────────────────────────────────────────────────
 
-function WikiViewer({ entry, onEdit, onDelete }: {
+function WikiViewer({ entry, onEdit, onDelete, onRestore }: {
   entry: WikiEntry
   onEdit: () => void
   onDelete: () => void
+  onRestore: (updated: WikiEntry) => void
 }) {
+  const [showHistory, setShowHistory] = useState(false)
+
   function handleExport() {
     const md = `# ${entry.title}\n\n${entry.content}`
     const blob = new Blob([md], { type: 'text/markdown' })
@@ -511,22 +674,40 @@ function WikiViewer({ entry, onEdit, onDelete }: {
 
   return (
     <div className="flex flex-col h-full">
+      {showHistory && (
+        <HistoryDialog
+          entry={entry}
+          onClose={() => setShowHistory(false)}
+          onRestored={updated => { setShowHistory(false); onRestore(updated) }}
+        />
+      )}
+
       {/* Header */}
       <div className="flex items-start justify-between px-6 pt-5 pb-3 border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex-1 min-w-0 pr-4">{entry.title}</h1>
-        <div className="flex items-center gap-1 flex-shrink-0">
-          <button onClick={handleExport} title="Exportar como .md"
-            className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
-            <Download className="w-4 h-4" />
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button
+            onClick={() => setShowHistory(true)}
+            title="Histórico de versões"
+            className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs text-gray-400 hover:text-amber-600 dark:hover:text-amber-400 bg-gray-100 dark:bg-gray-800 hover:bg-amber-50 dark:hover:bg-amber-900/30 transition-colors"
+          >
+            <History className="w-3 h-3" />
+            Histórico
           </button>
-          <button onClick={onEdit} title="Editar"
-            className="p-1.5 rounded hover:bg-amber-50 dark:hover:bg-amber-900/30 text-gray-400 hover:text-amber-600 dark:hover:text-amber-400 transition-colors">
-            <Edit2 className="w-4 h-4" />
-          </button>
-          <button onClick={onDelete} title="Excluir"
-            className="p-1.5 rounded hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-400 hover:text-red-500 transition-colors">
-            <Trash2 className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button onClick={handleExport} title="Exportar como .md"
+              className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+              <Download className="w-4 h-4" />
+            </button>
+            <button onClick={onEdit} title="Editar"
+              className="p-1.5 rounded hover:bg-amber-50 dark:hover:bg-amber-900/30 text-gray-400 hover:text-amber-600 dark:hover:text-amber-400 transition-colors">
+              <Edit2 className="w-4 h-4" />
+            </button>
+            <button onClick={onDelete} title="Excluir"
+              className="p-1.5 rounded hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-400 hover:text-red-500 transition-colors">
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -950,6 +1131,12 @@ export function WikiPage() {
               entry={selected}
               onEdit={() => setEditingId(selected.id)}
               onDelete={() => handleDelete(selected.id)}
+              onRestore={updated => {
+                queryClient.setQueryData(['wiki'], (prev: WikiEntry[] = []) =>
+                  prev.map(e => e.id === updated.id ? updated : e)
+                )
+                toast({ title: 'Versão restaurada com sucesso' })
+              }}
             />
           ) : (
             <WikiToc entries={sorted} onSelectEntry={selectEntry} onNew={handleNew} />
