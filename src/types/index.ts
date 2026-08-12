@@ -192,3 +192,20 @@ export interface Leitura {
   addedBy: string
   createdAt: string
 }
+
+// ─── Produções Recentes ───────────────────────────────────────────────────
+
+export interface Producao {
+  id: string
+  title: string
+  authors: string[]
+  year?: string
+  source?: string
+  meetingDate: string
+  pdfBase64?: string
+  pdfName?: string
+  url?: string
+  notes?: string
+  addedBy: string
+  createdAt: string
+}

@@ -1,6 +1,6 @@
 // ─── In-memory demo store ──────────────────────────────────────────────────
 
-import type { UsersIndex, UserTasks, UserProfile, OrdemDoDia, AtaDecisao, Leitura, SugestaoMessage, Orientacao, TarefaOrientacao, TimelineData, TimelineEvent, TimelineCategory } from '@/types'
+import type { UsersIndex, UserTasks, UserProfile, OrdemDoDia, AtaDecisao, Leitura, Producao, SugestaoMessage, Orientacao, TarefaOrientacao, TimelineData, TimelineEvent, TimelineCategory } from '@/types'
 
 export const DEMO_EMAIL = 'demo@colab.app'
 export const DEMO_EMAIL2 = 'ana@grupo.edu.br'
@@ -111,6 +111,29 @@ const DEMO_LEITURAS: Leitura[] = [
     authors: ['Castells, Manuel'],
     year: '2009',
     source: 'Paz e Terra',
+    meetingDate: '2026-04-17',
+    addedBy: DEMO_EMAIL2,
+    createdAt: NOW,
+  },
+]
+
+const DEMO_PRODUCOES: Producao[] = [
+  {
+    id: 'demo-producao-1',
+    title: 'Memória coletiva e identidade social: perspectivas teóricas',
+    authors: ['Silva, João Pedro', 'Oliveira, Fernanda'],
+    year: '2024',
+    source: 'Revista Brasileira de Ciências Sociais',
+    meetingDate: '2026-05-15',
+    addedBy: DEMO_EMAIL,
+    createdAt: NOW,
+  },
+  {
+    id: 'demo-producao-2',
+    title: 'Comunicação digital e democracia: desafios contemporâneos',
+    authors: ['Costa, Maria Clara'],
+    year: '2023',
+    source: 'Comunicação & Sociedade',
     meetingDate: '2026-04-17',
     addedBy: DEMO_EMAIL2,
     createdAt: NOW,
@@ -305,6 +328,7 @@ interface DemoStore {
   ordens: OrdemDoDia[]
   atas: AtaDecisao[]
   leituras: Leitura[]
+  producoes: Producao[]
   sugestoes: SugestaoMessage[]
   orientacoes: Orientacao[]
   tarefasOrientacao: TarefaOrientacao[]
@@ -319,6 +343,7 @@ function buildStore(): DemoStore {
     ordens: JSON.parse(JSON.stringify(DEMO_ORDENS)),
     atas: JSON.parse(JSON.stringify(DEMO_ATAS)),
     leituras: JSON.parse(JSON.stringify(DEMO_LEITURAS)),
+    producoes: JSON.parse(JSON.stringify(DEMO_PRODUCOES)),
     sugestoes: JSON.parse(JSON.stringify(DEMO_SUGESTOES)),
     orientacoes: JSON.parse(JSON.stringify(DEMO_ORIENTACOES)),
     tarefasOrientacao: JSON.parse(JSON.stringify(DEMO_TAREFAS_ORIENTACAO)),
@@ -379,6 +404,14 @@ export function demoSaveLeitura(l: Leitura): void {
   else _store.leituras.push(JSON.parse(JSON.stringify(l)))
 }
 export function demoDeleteLeitura(id: string): void { _store.leituras = _store.leituras.filter(x => x.id !== id) }
+
+export function demoLoadProducoes(): Producao[] { return JSON.parse(JSON.stringify(_store.producoes)) }
+export function demoSaveProducao(p: Producao): void {
+  const idx = _store.producoes.findIndex(x => x.id === p.id)
+  if (idx >= 0) _store.producoes[idx] = JSON.parse(JSON.stringify(p))
+  else _store.producoes.push(JSON.parse(JSON.stringify(p)))
+}
+export function demoDeleteProducao(id: string): void { _store.producoes = _store.producoes.filter(x => x.id !== id) }
 
 export function demoLoadSugestoes(): SugestaoMessage[] { return JSON.parse(JSON.stringify(_store.sugestoes)) }
 export function demoSaveSugestao(msg: SugestaoMessage): void {

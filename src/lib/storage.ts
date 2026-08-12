@@ -12,7 +12,7 @@ import {
   getRawUrl,
   type GitHubConfig,
 } from './github'
-import type { UsersIndex, UserTasks, UserProfile, OrdemDoDia, AtaDecisao, Leitura, SugestaoMessage, Orientacao, TarefaOrientacao, Anexo, TimelineData } from '@/types'
+import type { UsersIndex, UserTasks, UserProfile, OrdemDoDia, AtaDecisao, Leitura, Producao, SugestaoMessage, Orientacao, TarefaOrientacao, Anexo, TimelineData } from '@/types'
 import type { AppRepoConfig } from '@/lib/appConfig'
 import { emailSlug, generateId } from './utils'
 import {
@@ -23,6 +23,7 @@ import {
   demoLoadOrdens, demoSaveOrdem, demoDeleteOrdem,
   demoLoadAtas, demoSaveAta, demoDeleteAta,
   demoLoadLeituras, demoSaveLeitura, demoDeleteLeitura,
+  demoLoadProducoes, demoSaveProducao, demoDeleteProducao,
   demoLoadSugestoes, demoSaveSugestao, demoDeleteSugestao,
   demoLoadOrientacoes, demoSaveOrientacao, demoDeleteOrientacao,
   demoLoadTimeline, demoSaveTimeline,
@@ -306,6 +307,34 @@ export async function deleteLeitura(id: string): Promise<void> {
 }
 
 export { generateId }
+
+// ─── Produções Recentes ───────────────────────────────────────────────────
+
+export async function loadProducoes(): Promise<Producao[]> {
+  if (isDemoMode()) return demoLoadProducoes()
+  try {
+    const entries = await listDirectory(cfg(), 'producoes')
+    const files = entries.filter(e => e.type === 'file' && e.name.endsWith('.yaml'))
+    const results = await Promise.all(
+      files.map(f => readYaml<Producao>(`producoes/${f.name}`))
+    )
+    return results
+      .filter((x): x is Producao => x !== null)
+      .sort((a, b) => b.meetingDate.localeCompare(a.meetingDate))
+  } catch {
+    return []
+  }
+}
+
+export async function saveProducao(p: Producao): Promise<void> {
+  if (isDemoMode()) { demoSaveProducao(p); return }
+  await writeYaml(`producoes/${p.id}.yaml`, p, `Save producao ${p.id}`)
+}
+
+export async function deleteProducao(id: string): Promise<void> {
+  if (isDemoMode()) { demoDeleteProducao(id); return }
+  await removeYaml(`producoes/${id}.yaml`, `Delete producao ${id}`)
+}
 
 // ─── Sugestões ────────────────────────────────────────────────────────────
 
