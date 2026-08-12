@@ -14,7 +14,7 @@ import {
   getFileAtCommit,
   type GitHubConfig,
 } from './github'
-import type { UsersIndex, UserTasks, UserProfile, OrdemDoDia, AtaDecisao, Leitura, Producao, SugestaoMessage, Orientacao, TarefaOrientacao, Anexo, TimelineData, CalloutData, WikiEntry } from '@/types'
+import type { UsersIndex, UserTasks, UserProfile, OrdemDoDia, AtaDecisao, Leitura, Producao, SugestaoMessage, Orientacao, TarefaOrientacao, Anexo, TimelineData, CalloutData, WikiEntry, MeetingPlan } from '@/types'
 import type { AppRepoConfig } from '@/lib/appConfig'
 import { emailSlug, generateId } from './utils'
 import {
@@ -31,6 +31,7 @@ import {
   demoLoadTimeline, demoSaveTimeline,
   demoLoadCallout, demoSaveCallout,
   demoLoadWikiEntries, demoSaveWikiEntry, demoDeleteWikiEntry,
+  demoLoadMeetingPlans, demoSaveMeetingPlan, demoDeleteMeetingPlan,
 } from './demoStore'
 
 // ─── SHA cache ────────────────────────────────────────────────────────────
@@ -598,6 +599,34 @@ export async function getWikiEntryAtVersion(id: string, sha: string): Promise<Wi
   } catch {
     return null
   }
+}
+
+// ─── Planejamento das Reuniões ────────────────────────────────────────────
+
+export async function loadMeetingPlans(): Promise<MeetingPlan[]> {
+  if (isDemoMode()) return demoLoadMeetingPlans()
+  try {
+    const entries = await listDirectory(cfg(), 'planejamento')
+    const files = entries.filter(e => e.type === 'file' && e.name.endsWith('.yaml'))
+    const results = await Promise.all(
+      files.map(f => readYaml<MeetingPlan>(`planejamento/${f.name}`))
+    )
+    return results
+      .filter((x): x is MeetingPlan => x !== null)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  } catch {
+    return []
+  }
+}
+
+export async function saveMeetingPlan(p: MeetingPlan): Promise<void> {
+  if (isDemoMode()) { demoSaveMeetingPlan(p); return }
+  await writeYaml(`planejamento/${p.id}.yaml`, p, `Save plan ${p.id}`)
+}
+
+export async function deleteMeetingPlan(id: string): Promise<void> {
+  if (isDemoMode()) { demoDeleteMeetingPlan(id); return }
+  await removeYaml(`planejamento/${id}.yaml`, `Delete plan ${id}`)
 }
 
 // Target ≤ 500 KB binary so the base64 data URI (~667 KB) fits comfortably

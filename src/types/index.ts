@@ -231,3 +231,38 @@ export interface Producao {
   addedBy: string
   createdAt: string
 }
+
+// ─── Planejamento das Reuniões ────────────────────────────────────────────
+
+export interface PlanReading {
+  id: string
+  title: string
+  authors?: string
+  year?: string
+  url?: string
+  notes?: string
+  pdfBase64?: string
+  pdfName?: string
+}
+
+export interface PlannedMeeting {
+  id: string
+  date: string          // YYYY-MM-DD
+  isSpecial: boolean
+  description?: string
+  readingId?: string    // references PlanReading.id
+}
+
+export interface MeetingPlan {
+  id: string
+  name: string
+  startDate: string     // YYYY-MM-DD
+  endDate: string       // YYYY-MM-DD
+  weekday: number       // 0=Dom … 6=Sáb
+  intervalWeeks: number // 1=semanal, 2=quinzenal, etc.
+  meetings: PlannedMeeting[]
+  readings: PlanReading[]
+  archived: boolean
+  createdAt: string
+  createdBy: string
+}

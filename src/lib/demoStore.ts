@@ -1,6 +1,6 @@
 // ─── In-memory demo store ──────────────────────────────────────────────────
 
-import type { UsersIndex, UserTasks, UserProfile, OrdemDoDia, AtaDecisao, Leitura, Producao, SugestaoMessage, Orientacao, TarefaOrientacao, TimelineData, TimelineEvent, TimelineCategory, CalloutData, WikiEntry } from '@/types'
+import type { UsersIndex, UserTasks, UserProfile, OrdemDoDia, AtaDecisao, Leitura, Producao, SugestaoMessage, Orientacao, TarefaOrientacao, TimelineData, TimelineEvent, TimelineCategory, CalloutData, WikiEntry, MeetingPlan } from '@/types'
 
 export const DEMO_EMAIL = 'demo@colab.app'
 export const DEMO_EMAIL2 = 'ana@grupo.edu.br'
@@ -372,6 +372,37 @@ Toda produção acadêmica deve ser registrada no módulo **Produções Recentes
 
 const DEMO_CALLOUT: CalloutData = { content: '', updated_at: NOW, updated_by: '' }
 
+const DEMO_MEETING_PLANS: MeetingPlan[] = [
+  {
+    id: 'demo-plan-1',
+    name: '2º Semestre 2026',
+    startDate: '2026-08-13',
+    endDate: '2026-12-11',
+    weekday: 5, // sexta
+    intervalWeeks: 2,
+    archived: false,
+    createdAt: NOW,
+    createdBy: DEMO_EMAIL,
+    readings: [
+      { id: 'pr-1', title: 'Os usos sociais da ciência', authors: 'Bourdieu, Pierre', year: '2004' },
+      { id: 'pr-2', title: 'Comunicação e poder', authors: 'Castells, Manuel', year: '2009' },
+      { id: 'pr-3', title: 'A imaginação sociológica', authors: 'Mills, C. Wright', year: '1959' },
+    ],
+    meetings: [
+      { id: 'pm-1', date: '2026-08-13', isSpecial: false, description: 'Reunião de abertura do semestre', readingId: 'pr-1' },
+      { id: 'pm-2', date: '2026-08-27', isSpecial: false, description: '', readingId: 'pr-2' },
+      { id: 'pm-3', date: '2026-09-10', isSpecial: false, description: '' },
+      { id: 'pm-4', date: '2026-09-24', isSpecial: false, description: '' },
+      { id: 'pm-5', date: '2026-10-08', isSpecial: false, description: '' },
+      { id: 'pm-6', date: '2026-10-22', isSpecial: false, description: '' },
+      { id: 'pm-7', date: '2026-11-05', isSpecial: false, description: '' },
+      { id: 'pm-8', date: '2026-11-19', isSpecial: false, description: '' },
+      { id: 'pm-9', date: '2026-12-03', isSpecial: false, description: 'Encerramento do semestre' },
+      { id: 'pm-10', date: '2026-09-18', isSpecial: true, description: 'Sessão especial: defesa de dissertação', readingId: 'pr-3' },
+    ],
+  },
+]
+
 // ─── Mutable store ─────────────────────────────────────────────────────────
 
 interface DemoStore {
@@ -388,6 +419,7 @@ interface DemoStore {
   timeline: TimelineData
   callout: CalloutData
   wiki: WikiEntry[]
+  meetingPlans: MeetingPlan[]
 }
 
 function buildStore(): DemoStore {
@@ -405,6 +437,7 @@ function buildStore(): DemoStore {
     timeline: JSON.parse(JSON.stringify({ events: DEMO_TIMELINE_EVENTS, categories: DEMO_TIMELINE_CATEGORIES })),
     callout: JSON.parse(JSON.stringify(DEMO_CALLOUT)),
     wiki: JSON.parse(JSON.stringify(DEMO_WIKI)),
+    meetingPlans: JSON.parse(JSON.stringify(DEMO_MEETING_PLANS)),
   }
 }
 
@@ -515,3 +548,11 @@ export function demoSaveWikiEntry(e: WikiEntry): void {
   else _store.wiki.push(JSON.parse(JSON.stringify(e)))
 }
 export function demoDeleteWikiEntry(id: string): void { _store.wiki = _store.wiki.filter(x => x.id !== id) }
+
+export function demoLoadMeetingPlans(): MeetingPlan[] { return JSON.parse(JSON.stringify(_store.meetingPlans)) }
+export function demoSaveMeetingPlan(p: MeetingPlan): void {
+  const idx = _store.meetingPlans.findIndex(x => x.id === p.id)
+  if (idx >= 0) _store.meetingPlans[idx] = JSON.parse(JSON.stringify(p))
+  else _store.meetingPlans.push(JSON.parse(JSON.stringify(p)))
+}
+export function demoDeleteMeetingPlan(id: string): void { _store.meetingPlans = _store.meetingPlans.filter(x => x.id !== id) }
