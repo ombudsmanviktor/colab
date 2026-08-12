@@ -567,22 +567,51 @@ export async function deleteWikiEntry(id: string): Promise<void> {
   await removeYaml(`${WIKI_DIR}/${id}.md`, `Delete wiki entry ${id}`)
 }
 
-export async function uploadWikiImage(file: File): Promise<string> {
-  if (isDemoMode()) {
-    return new Promise(resolve => {
-      const reader = new FileReader()
-      reader.onload = e => resolve(e.target?.result as string)
-      reader.readAsDataURL(file)
-    })
+// Target ≤ 500 KB binary so the base64 data URI (~667 KB) fits comfortably
+// inside GitHub's 1 MB Contents API limit for the wiki entry file.
+const IMAGE_INLINE_LIMIT = 500_000
+
+function readFileAsDataUrl(file: File | Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = e => resolve(e.target?.result as string)
+    reader.onerror = () => reject(new Error('Failed to read file'))
+    reader.readAsDataURL(file)
+  })
+}
+
+async function compressImageToDataUrl(file: File): Promise<string> {
+  // SVG and GIF pass through unchanged (canvas would break them)
+  if (file.type === 'image/svg+xml' || file.type === 'image/gif') {
+    return readFileAsDataUrl(file)
   }
-  const c = cfg()
-  const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
-  const path = `${WIKI_DIR}/images/${Date.now()}-${safe}`
-  let existingSha: string | undefined
-  try { const f = await readFile(c, path); existingSha = f.sha } catch { /* new */ }
-  const result = await writeBinaryFile(c, path, file, `Wiki image: ${file.name}`, existingSha)
-  shaCache.set(path, result.content.sha)
-  return getRawUrl(c, path)
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    const objectUrl = URL.createObjectURL(file)
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl)
+      const scale = Math.sqrt(IMAGE_INLINE_LIMIT / file.size) * 0.9
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.max(1, Math.round(img.width * Math.min(scale, 1)))
+      canvas.height = Math.max(1, Math.round(img.height * Math.min(scale, 1)))
+      const ctx = canvas.getContext('2d')
+      if (!ctx) { reject(new Error('No canvas context')); return }
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+      const mime = file.type === 'image/png' ? 'image/png' : 'image/jpeg'
+      resolve(canvas.toDataURL(mime, 0.85))
+    }
+    img.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error('Image load failed')) }
+    img.src = objectUrl
+  })
+}
+
+export async function uploadWikiImage(file: File): Promise<string> {
+  // Always embed as a base64 data URI so images are self-contained in the
+  // markdown file and work regardless of whether the data repo is public.
+  if (file.size <= IMAGE_INLINE_LIMIT) {
+    return readFileAsDataUrl(file)
+  }
+  return compressImageToDataUrl(file)
 }
 
 // ─── App config (users/app-config.yaml in data repo) ─────────────────────
