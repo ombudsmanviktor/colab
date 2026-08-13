@@ -433,10 +433,10 @@ export function Usuarios() {
   const emails = index?.emails ?? []
   const profileMap = new Map(profiles.map(p => [p.email, p]))
 
-  // Sort: self first, then by insertion order in emails[] (oldest = first added)
+  // Sort: self first, then alphabetically by email
   const sortedEmails = [
     ...(emails.includes(myEmail) ? [myEmail] : []),
-    ...emails.filter(e => e !== myEmail),
+    ...emails.filter(e => e !== myEmail).sort((a, b) => a.localeCompare(b)),
   ]
 
   const admins = index?.admins ?? []

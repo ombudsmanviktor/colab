@@ -46,9 +46,9 @@ function cfg(): GitHubConfig {
 
 // ─── YAML helpers ─────────────────────────────────────────────────────────
 
-async function readYaml<T>(path: string): Promise<T | null> {
+async function readYaml<T>(path: string, bypassCache = false): Promise<T | null> {
   try {
-    const file = await readFile(cfg(), path)
+    const file = await readFile(cfg(), path, bypassCache)
     shaCache.set(path, file.sha)
     try {
       return yaml.load(decodeContent(file.content)) as T
@@ -105,6 +105,56 @@ async function _doWrite<T>(path: string, data: T, message: string): Promise<void
   }
 }
 
+// Read-fresh-then-write: reads the current file content with bypassCache,
+// applies a merge function, and writes only if the function returns a new value.
+// Runs inside the write queue to prevent SHA races.
+async function mergeYaml<T>(
+  path: string,
+  merge: (current: T) => T | null,
+  message: string,
+  empty: T,
+): Promise<void> {
+  const prev = writeQueue.get(path) ?? Promise.resolve()
+  const next = prev.then(() => _doMerge(path, merge, message, empty))
+  writeQueue.set(path, next.catch(() => {}))
+  return next
+}
+
+async function _doMerge<T>(
+  path: string,
+  merge: (current: T) => T | null,
+  message: string,
+  empty: T,
+): Promise<void> {
+  const MAX = 5
+  for (let attempt = 0; attempt < MAX; attempt++) {
+    // Read fresh content AND sha from origin
+    let current: T = empty
+    try {
+      const file = await readFile(cfg(), path, true)
+      shaCache.set(path, file.sha)
+      current = (yaml.load(decodeContent(file.content)) as T) ?? empty
+    } catch {
+      shaCache.delete(path)
+    }
+    const updated = merge(current)
+    if (updated === null) return // no change needed
+    const text = yaml.dump(updated, { lineWidth: -1 })
+    try {
+      const sha = shaCache.get(path)
+      const res = await writeTextFile(cfg(), path, text, message, sha)
+      shaCache.set(path, res.content.sha)
+      return
+    } catch (err: unknown) {
+      if (attempt < MAX - 1) {
+        await new Promise(r => setTimeout(r, 150 * (attempt + 1)))
+      } else {
+        throw err
+      }
+    }
+  }
+}
+
 async function removeYaml(path: string, message: string): Promise<void> {
   const sha = shaCache.get(path)
   if (!sha) {
@@ -120,46 +170,71 @@ async function removeYaml(path: string, message: string): Promise<void> {
 
 // ─── Users Index ──────────────────────────────────────────────────────────
 
+const USERS_INDEX_PATH = 'users/index.yaml'
+const EMPTY_INDEX: UsersIndex = { emails: [], admins: [] }
+
 export async function loadUsersIndex(): Promise<UsersIndex> {
   if (isDemoMode()) return demoLoadUsersIndex()
-  const data = await readYaml<UsersIndex>('users/index.yaml')
+  // bypassCache=true: GitHub's CDN can cache GET responses for up to 60 s.
+  // Without bypass, a page reload after an add/remove may return stale data
+  // making it appear the change was lost.
+  const data = await readYaml<UsersIndex>(USERS_INDEX_PATH, true)
   return data ?? { emails: [], admins: [] }
 }
 
 export async function saveUsersIndex(idx: UsersIndex): Promise<void> {
   if (isDemoMode()) { demoSaveUsersIndex(idx); return }
-  await writeYaml('users/index.yaml', idx, 'Update users index')
+  await writeYaml(USERS_INDEX_PATH, idx, 'Update users index')
 }
 
 export async function addUser(email: string): Promise<void> {
-  const idx = await loadUsersIndex()
-  if (!idx.emails.includes(email)) {
-    idx.emails.push(email)
-    await saveUsersIndex(idx)
+  if (isDemoMode()) {
+    const idx = demoLoadUsersIndex()
+    if (!idx.emails.includes(email)) { idx.emails.push(email); demoSaveUsersIndex(idx) }
+    return
   }
+  // mergeYaml reads fresh content inside the write queue — prevents stale-data
+  // overwrites when multiple writes to the same file happen in quick succession.
+  await mergeYaml<UsersIndex>(
+    USERS_INDEX_PATH,
+    idx => idx.emails.includes(email) ? null : { ...idx, emails: [...idx.emails, email] },
+    `Add user ${email}`,
+    EMPTY_INDEX,
+  )
 }
 
-/**
- * Called at login when the authenticated GitHub user's login matches the
- * repo owner. Ensures that email is registered and has admin rights.
- * Idempotent — safe to call on every login.
- */
 export async function ensureOwnerAdmin(email: string): Promise<void> {
   if (isDemoMode()) return
   try {
-    const idx = await loadUsersIndex()
-    let changed = false
-    if (!idx.emails.includes(email)) { idx.emails.push(email); changed = true }
-    if (!idx.admins.includes(email)) { idx.admins.push(email); changed = true }
-    if (changed) await saveUsersIndex(idx)
+    await mergeYaml<UsersIndex>(
+      USERS_INDEX_PATH,
+      idx => {
+        const hasEmail = idx.emails.includes(email)
+        const hasAdmin = idx.admins.includes(email)
+        if (hasEmail && hasAdmin) return null
+        return {
+          emails: hasEmail ? idx.emails : [...idx.emails, email],
+          admins: hasAdmin ? idx.admins : [...idx.admins, email],
+        }
+      },
+      `Ensure owner admin ${email}`,
+      EMPTY_INDEX,
+    )
   } catch { /* silent — don't break login */ }
 }
 
 export async function removeUser(email: string): Promise<void> {
-  const idx = await loadUsersIndex()
-  idx.emails = idx.emails.filter(e => e !== email)
-  idx.admins = idx.admins.filter(e => e !== email)
-  await saveUsersIndex(idx)
+  if (isDemoMode()) {
+    const idx = demoLoadUsersIndex()
+    demoSaveUsersIndex({ emails: idx.emails.filter(e => e !== email), admins: idx.admins.filter(e => e !== email) })
+    return
+  }
+  await mergeYaml<UsersIndex>(
+    USERS_INDEX_PATH,
+    idx => ({ emails: idx.emails.filter(e => e !== email), admins: idx.admins.filter(e => e !== email) }),
+    `Remove user ${email}`,
+    EMPTY_INDEX,
+  )
   // Clean up all data files for this user (best-effort; errors are silenced)
   await Promise.allSettled([
     removeYaml(`tasks/${emailSlug(email)}.yaml`, `Delete tasks for ${email}`),
