@@ -300,6 +300,8 @@ function MeetingCard({
   // Local description state — prevents re-render from saveMutation from clobbering typed text
   const [desc, setDesc] = useState(meeting.description ?? '')
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
   // Sync from prop only when it changes externally (e.g. plan loaded fresh)
   const lastPropDesc = useRef(meeting.description ?? '')
   useEffect(() => {
@@ -308,6 +310,14 @@ function MeetingCard({
       setDesc(meeting.description ?? '')
     }
   }, [meeting.description])
+
+  // Auto-resize textarea whenever desc changes
+  useEffect(() => {
+    const el = textareaRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = el.scrollHeight + 'px'
+  }, [desc])
 
   function handleDescChange(value: string) {
     setDesc(value)
@@ -371,16 +381,11 @@ function MeetingCard({
         </div>
         <div className="flex-1 min-w-0">
           <textarea
-            className="w-full text-sm bg-transparent border-none outline-none resize-none text-gray-700 dark:text-gray-300 placeholder-gray-400 dark:placeholder-gray-600 leading-snug"
+            ref={textareaRef}
+            className="w-full text-sm bg-transparent border-none outline-none resize-none overflow-hidden text-gray-700 dark:text-gray-300 placeholder-gray-400 dark:placeholder-gray-600 leading-snug"
             value={desc}
             onChange={e => handleDescChange(e.target.value)}
             placeholder="Descrição / motivação do encontro…"
-            rows={1}
-            onInput={e => {
-              const el = e.currentTarget
-              el.style.height = 'auto'
-              el.style.height = el.scrollHeight + 'px'
-            }}
           />
           {/* Reading slot */}
           {assignedReading ? (
