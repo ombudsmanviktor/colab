@@ -12,15 +12,6 @@ import { extractPdfMetadata } from '@/lib/pdfExtract'
 import type { MeetingPlan, PlannedMeeting, PlanReading } from '@/types'
 import { useAuth } from '@/contexts/AuthContext'
 
-function fileToDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = e => resolve(e.target?.result as string)
-    reader.onerror = reject
-    reader.readAsDataURL(file)
-  })
-}
-
 // ─── Date helpers ─────────────────────────────────────────────────────────
 
 const WEEKDAYS_PT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
@@ -438,11 +429,13 @@ function PlanDetail({
   onUpdate,
   onArchive,
   onDelete,
+  toast,
 }: {
   plan: MeetingPlan
   onUpdate: (p: MeetingPlan) => void
   onArchive: () => void
   onDelete: () => void
+  toast: (opts: { title: string; description?: string; variant?: 'default' | 'destructive' }) => void
 }) {
   const [showSpecialDialog, setShowSpecialDialog] = useState(false)
   const [showReadingForm, setShowReadingForm] = useState(false)
@@ -461,20 +454,19 @@ function PlanDetail({
     try {
       const buffer = await file.arrayBuffer()
       const meta = await extractPdfMetadata(buffer)
-      const dataUrl = await fileToDataUrl(file)
       const reading: PlanReading = {
         id: generateId(),
         title: meta.title && meta.title !== 'Título não identificado' ? meta.title : file.name.replace(/\.pdf$/i, ''),
         authors: (meta.authors ?? []).join('; ') || undefined,
         year: meta.year,
-        pdfBase64: dataUrl,
-        pdfName: file.name,
       }
       onUpdate({
         ...plan,
         readings: [...plan.readings, reading],
         meetings: plan.meetings.map(m => m.id === meetingId ? { ...m, readingId: reading.id } : m),
       })
+    } catch {
+      toast({ title: 'Erro ao processar arquivo', description: 'Não foi possível extrair os metadados do PDF.', variant: 'destructive' })
     } finally {
       setProcessingMeetingId(null)
     }
@@ -829,6 +821,7 @@ export default function PlanejamentoPage() {
             onUpdate={handleUpdate}
             onArchive={() => handleArchive(selectedPlan)}
             onDelete={() => handleDelete(selectedPlan.id)}
+            toast={toast}
           />
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center text-gray-400 dark:text-gray-600 gap-4 p-8">
