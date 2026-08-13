@@ -241,8 +241,8 @@ export interface PlanReading {
   year?: string
   url?: string
   notes?: string
-  pdfBase64?: string
-  pdfName?: string
+  pdfPath?: string  // path in the GitHub data repo
+  pdfName?: string  // original filename for download
 }
 
 export interface PlannedMeeting {

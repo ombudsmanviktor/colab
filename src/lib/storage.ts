@@ -695,6 +695,42 @@ export async function loadMeetingPlans(): Promise<MeetingPlan[]> {
   }
 }
 
+export async function uploadPlanPdf(readingId: string, file: File): Promise<string | undefined> {
+  if (isDemoMode()) return undefined
+  const c = cfg()
+  const filePath = `planejamento/pdfs/${readingId}.pdf`
+  let existingSha: string | undefined
+  try {
+    const existing = await readFile(c, filePath)
+    existingSha = existing.sha
+  } catch { /* new file */ }
+  const result = await writeBinaryFile(c, filePath, file, `Upload PDF for reading ${readingId}`, existingSha)
+  shaCache.set(filePath, result.content.sha)
+  return filePath
+}
+
+export async function deletePlanPdf(readingId: string): Promise<void> {
+  if (isDemoMode()) return
+  await removeYaml(`planejamento/pdfs/${readingId}.pdf`, `Delete PDF for reading ${readingId}`)
+}
+
+export async function downloadPlanPdf(pdfPath: string, filename: string): Promise<void> {
+  const file = await readFile(cfg(), pdfPath)
+  const base64 = file.content.replace(/\n/g, '')
+  const binStr = atob(base64)
+  const bytes = new Uint8Array(binStr.length)
+  for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i)
+  const blob = new Blob([bytes], { type: 'application/pdf' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
 export async function saveMeetingPlan(p: MeetingPlan): Promise<void> {
   if (isDemoMode()) { demoSaveMeetingPlan(p); return }
   await writeYaml(`planejamento/${p.id}.yaml`, p, `Save plan ${p.id}`)

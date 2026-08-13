@@ -3,11 +3,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { DragDropContext, Droppable, Draggable, type DropResult, type DraggableProvided } from '@hello-pangea/dnd'
 import {
   Plus, Calendar, Archive, ChevronDown, ChevronRight, Trash2,
-  GripVertical, BookOpen, X, Edit2, Star, Upload,
+  GripVertical, BookOpen, X, Edit2, Star, Upload, Download, Loader2,
 } from 'lucide-react'
 import { useToast } from '@/hooks/useToast'
 import { ToastContainer } from '@/components/ui/toast'
-import { loadMeetingPlans, saveMeetingPlan, deleteMeetingPlan, generateId } from '@/lib/storage'
+import { loadMeetingPlans, saveMeetingPlan, deleteMeetingPlan, generateId, uploadPlanPdf, deletePlanPdf, downloadPlanPdf } from '@/lib/storage'
 import { extractPdfMetadata } from '@/lib/pdfExtract'
 import type { MeetingPlan, PlannedMeeting, PlanReading } from '@/types'
 import { useAuth } from '@/contexts/AuthContext'
@@ -442,6 +442,19 @@ function PlanDetail({
   const [editingReading, setEditingReading] = useState<PlanReading | null>(null)
   const [editingPlan, setEditingPlan] = useState(false)
   const [processingMeetingId, setProcessingMeetingId] = useState<string | null>(null)
+  const [downloadingId, setDownloadingId] = useState<string | null>(null)
+
+  async function handleDownloadPdf(reading: PlanReading) {
+    if (!reading.pdfPath) return
+    setDownloadingId(reading.id)
+    try {
+      await downloadPlanPdf(reading.pdfPath, reading.pdfName ?? `${reading.title}.pdf`)
+    } catch {
+      toast({ title: 'Erro ao baixar PDF', description: 'Não foi possível recuperar o arquivo do GitHub.', variant: 'destructive' })
+    } finally {
+      setDownloadingId(null)
+    }
+  }
 
   const sortedMeetings = useMemo(() => sortMeetings(plan.meetings), [plan.meetings])
 
@@ -459,14 +472,17 @@ function PlanDetail({
         title: meta.title && meta.title !== 'Título não identificado' ? meta.title : file.name.replace(/\.pdf$/i, ''),
         authors: (meta.authors ?? []).join('; ') || undefined,
         year: meta.year,
+        pdfName: file.name,
       }
+      const pdfPath = await uploadPlanPdf(reading.id, file)
+      if (pdfPath) reading.pdfPath = pdfPath
       onUpdate({
         ...plan,
         readings: [...plan.readings, reading],
         meetings: plan.meetings.map(m => m.id === meetingId ? { ...m, readingId: reading.id } : m),
       })
     } catch {
-      toast({ title: 'Erro ao processar arquivo', description: 'Não foi possível extrair os metadados do PDF.', variant: 'destructive' })
+      toast({ title: 'Erro ao processar arquivo', description: 'Não foi possível importar o PDF.', variant: 'destructive' })
     } finally {
       setProcessingMeetingId(null)
     }
@@ -493,6 +509,8 @@ function PlanDetail({
   }
 
   function deleteReading(id: string) {
+    const reading = plan.readings.find(r => r.id === id)
+    if (reading?.pdfPath) deletePlanPdf(reading.id).catch(() => {})
     onUpdate({
       ...plan,
       readings: plan.readings.filter(r => r.id !== id),
@@ -628,6 +646,18 @@ function PlanDetail({
                                 <p className="text-xs font-medium text-gray-800 dark:text-gray-200 leading-snug">{reading.title}</p>
                                 {reading.authors && <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 truncate">{reading.authors}{reading.year ? `, ${reading.year}` : ''}</p>}
                               </div>
+                              {reading.pdfPath && (
+                                <button
+                                  onClick={() => handleDownloadPdf(reading)}
+                                  disabled={downloadingId === reading.id}
+                                  className="shrink-0 text-gray-300 hover:text-blue-500 transition-colors disabled:opacity-50"
+                                  title="Baixar PDF"
+                                >
+                                  {downloadingId === reading.id
+                                    ? <Loader2 className="w-3 h-3 animate-spin" />
+                                    : <Download className="w-3 h-3" />}
+                                </button>
+                              )}
                               <button onClick={() => setEditingReading(reading)}
                                 className="shrink-0 text-gray-300 hover:text-amber-500 transition-colors">
                                 <Edit2 className="w-3 h-3" />
