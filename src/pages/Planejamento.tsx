@@ -725,10 +725,9 @@ export default function PlanejamentoPage() {
     onSuccess: (_, plan) => {
       queryClient.setQueryData(['meeting-plans'], (prev: MeetingPlan[] = []) => {
         const idx = prev.findIndex(p => p.id === plan.id)
-        const isNew = idx < 0
-        const updated = isNew ? [plan, ...prev] : prev.map(p => p.id === plan.id ? plan : p)
-        if (isNew) toast({ title: 'Plano criado', description: 'Salvo no GitHub com sucesso.' })
-        return updated
+        return idx >= 0
+          ? prev.map(p => p.id === plan.id ? plan : p)
+          : [plan, ...prev]
       })
     },
     onError: () => toast({
@@ -763,10 +762,16 @@ export default function PlanejamentoPage() {
       createdAt: new Date().toISOString(),
       createdBy: session?.email ?? '',
     }
-    saveMutation.mutate(plan)
+    // Optimistic update: put the plan in the cache immediately so it appears
+    // in the sidebar without waiting for the GitHub round-trip (2–5 s).
+    // onSuccess confirms/syncs it; onError shows the failure toast.
+    queryClient.setQueryData(['meeting-plans'], (prev: MeetingPlan[] = []) => [plan, ...prev])
     setSelectedId(plan.id)
     setShowNewPlan(false)
-  }, [session, saveMutation, toast])
+    saveMutation.mutate(plan, {
+      onSuccess: () => toast({ title: 'Plano criado', description: 'Salvo no GitHub com sucesso.' }),
+    })
+  }, [session, saveMutation, queryClient, toast])
 
   const handleUpdate = useCallback((updated: MeetingPlan) => {
     saveMutation.mutate(updated)
