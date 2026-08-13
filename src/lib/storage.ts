@@ -51,15 +51,17 @@ async function readYaml<T>(path: string, bypassCache = false): Promise<T | null>
     const file = await readFile(cfg(), path, bypassCache)
     shaCache.set(path, file.sha)
     try {
-      return yaml.load(decodeContent(file.content)) as T
+      // GitHub returns content:"" encoding:"none" for files > 1 MB.
+      // yaml.load("") returns undefined, which must be treated as missing.
+      const parsed = yaml.load(decodeContent(file.content))
+      if (parsed == null || typeof parsed !== 'object') return null
+      return parsed as T
     } catch {
-      // Malformed YAML — treat as missing
       return null
     }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
     if (msg.includes('Not Found') || msg.includes('404')) return null
-    // Other API errors (rate limit, permission, branch missing) — treat as missing
     return null
   }
 }
@@ -687,9 +689,9 @@ export async function loadMeetingPlans(): Promise<MeetingPlan[]> {
       files.map(f => readYaml<MeetingPlan>(`planejamento/${f.name}`, true))
     )
     return results
-      .filter((x): x is MeetingPlan => x !== null)
+      .filter((x): x is MeetingPlan => x != null)
       .map(p => ({ ...p, readings: p.readings ?? [], meetings: p.meetings ?? [] }))
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''))
   } catch {
     return []
   }
