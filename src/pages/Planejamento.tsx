@@ -524,12 +524,14 @@ function PlanDetail({
     const srcId = result.source.droppableId
     const dstId = result.destination.droppableId
 
-    // Reorder sessions in the list — splice to new position and save
+    // Reorder sessions — keep dates in chronological order, reassign to new positions
     if (result.type === 'meeting') {
       const items = [...plan.meetings]
+      const dates = items.map(m => m.date).sort((a, b) => a.localeCompare(b))
       const [moved] = items.splice(result.source.index, 1)
       items.splice(result.destination.index, 0, moved)
-      onUpdate({ ...plan, meetings: items })
+      const reordered = items.map((m, i) => ({ ...m, date: dates[i] }))
+      onUpdate({ ...plan, meetings: reordered })
       return
     }
 
