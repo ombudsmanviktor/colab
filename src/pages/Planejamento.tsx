@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
+import { useState, useMemo, useCallback, useRef, useEffect, useLayoutEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { DragDropContext, Droppable, Draggable, type DropResult, type DraggableProvided } from '@hello-pangea/dnd'
 import {
@@ -297,22 +297,16 @@ function MeetingCard({
   const [fileDragOver, setFileDragOver] = useState(false)
   const dragCounter = useRef(0)
 
-  // Local description state — prevents re-render from saveMutation from clobbering typed text
+  // Local description — authoritative while this component is mounted.
+  // Never sync back from the prop: a completed save updates the query cache
+  // which changes meeting.description, but overwriting desc here would clobber
+  // text the user typed in the meantime.
   const [desc, setDesc] = useState(meeting.description ?? '')
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  // Sync from prop only when it changes externally (e.g. plan loaded fresh)
-  const lastPropDesc = useRef(meeting.description ?? '')
-  useEffect(() => {
-    if (meeting.description !== lastPropDesc.current) {
-      lastPropDesc.current = meeting.description ?? ''
-      setDesc(meeting.description ?? '')
-    }
-  }, [meeting.description])
-
-  // Auto-resize textarea whenever desc changes
-  useEffect(() => {
+  // Auto-resize before paint so there is no layout flash
+  useLayoutEffect(() => {
     const el = textareaRef.current
     if (!el) return
     el.style.height = 'auto'
