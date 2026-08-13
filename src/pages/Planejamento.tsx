@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useRef } from 'react'
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { DragDropContext, Droppable, Draggable, type DropResult, type DraggableProvided } from '@hello-pangea/dnd'
 import {
@@ -297,6 +297,24 @@ function MeetingCard({
   const [fileDragOver, setFileDragOver] = useState(false)
   const dragCounter = useRef(0)
 
+  // Local description state — prevents re-render from saveMutation from clobbering typed text
+  const [desc, setDesc] = useState(meeting.description ?? '')
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Sync from prop only when it changes externally (e.g. plan loaded fresh)
+  const lastPropDesc = useRef(meeting.description ?? '')
+  useEffect(() => {
+    if (meeting.description !== lastPropDesc.current) {
+      lastPropDesc.current = meeting.description ?? ''
+      setDesc(meeting.description ?? '')
+    }
+  }, [meeting.description])
+
+  function handleDescChange(value: string) {
+    setDesc(value)
+    if (debounceTimer.current) clearTimeout(debounceTimer.current)
+    debounceTimer.current = setTimeout(() => onDescChange(value), 600)
+  }
+
   function isFileDrag(e: React.DragEvent) {
     return Array.from(e.dataTransfer.types).includes('Files')
   }
@@ -352,11 +370,17 @@ function MeetingCard({
           {meeting.isSpecial && <Star className="w-3 h-3 text-amber-500 mt-1" />}
         </div>
         <div className="flex-1 min-w-0">
-          <input
-            className="w-full text-sm bg-transparent border-none outline-none text-gray-700 dark:text-gray-300 placeholder-gray-400 dark:placeholder-gray-600"
-            value={meeting.description ?? ''}
-            onChange={e => onDescChange(e.target.value)}
+          <textarea
+            className="w-full text-sm bg-transparent border-none outline-none resize-none text-gray-700 dark:text-gray-300 placeholder-gray-400 dark:placeholder-gray-600 leading-snug"
+            value={desc}
+            onChange={e => handleDescChange(e.target.value)}
             placeholder="Descrição / motivação do encontro…"
+            rows={1}
+            onInput={e => {
+              const el = e.currentTarget
+              el.style.height = 'auto'
+              el.style.height = el.scrollHeight + 'px'
+            }}
           />
           {/* Reading slot */}
           {assignedReading ? (
