@@ -688,6 +688,7 @@ export async function loadMeetingPlans(): Promise<MeetingPlan[]> {
     )
     return results
       .filter((x): x is MeetingPlan => x !== null)
+      .map(p => ({ ...p, readings: p.readings ?? [], meetings: p.meetings ?? [] }))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
   } catch {
     return []
