@@ -703,10 +703,18 @@ export default function PlanejamentoPage() {
     onSuccess: (_, plan) => {
       queryClient.setQueryData(['meeting-plans'], (prev: MeetingPlan[] = []) => {
         const idx = prev.findIndex(p => p.id === plan.id)
-        return idx >= 0 ? prev.map(p => p.id === plan.id ? plan : p) : [plan, ...prev]
+        const isNew = idx < 0
+        const updated = isNew ? [plan, ...prev] : prev.map(p => p.id === plan.id ? plan : p)
+        if (isNew) toast({ title: 'Plano criado', description: 'Salvo no GitHub com sucesso.' })
+        return updated
       })
     },
-    onError: () => toast({ title: 'Erro ao salvar', variant: 'destructive' }),
+    onError: () => toast({
+      title: 'Erro ao salvar plano',
+      description: 'Os dados não foram gravados no GitHub. Verifique sua conexão e tente novamente.',
+      variant: 'destructive',
+      duration: 8000,
+    }),
   })
 
   const deleteMutation = useMutation({
@@ -736,7 +744,6 @@ export default function PlanejamentoPage() {
     saveMutation.mutate(plan)
     setSelectedId(plan.id)
     setShowNewPlan(false)
-    toast({ title: 'Plano criado' })
   }, [session, saveMutation, toast])
 
   const handleUpdate = useCallback((updated: MeetingPlan) => {
