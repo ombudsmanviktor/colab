@@ -681,10 +681,10 @@ export async function getWikiEntryAtVersion(id: string, sha: string): Promise<Wi
 export async function loadMeetingPlans(): Promise<MeetingPlan[]> {
   if (isDemoMode()) return demoLoadMeetingPlans()
   try {
-    const entries = await listDirectory(cfg(), 'planejamento')
+    const entries = await listDirectory(cfg(), 'planejamento', true)
     const files = entries.filter(e => e.type === 'file' && e.name.endsWith('.yaml'))
     const results = await Promise.all(
-      files.map(f => readYaml<MeetingPlan>(`planejamento/${f.name}`))
+      files.map(f => readYaml<MeetingPlan>(`planejamento/${f.name}`, true))
     )
     return results
       .filter((x): x is MeetingPlan => x !== null)

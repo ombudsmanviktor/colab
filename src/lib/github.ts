@@ -64,11 +64,12 @@ export interface GHDirEntry {
   type: 'file' | 'dir'
 }
 
-export async function listDirectory(cfg: GitHubConfig, dirPath: string): Promise<GHDirEntry[]> {
+export async function listDirectory(cfg: GitHubConfig, dirPath: string, bypassCache = false): Promise<GHDirEntry[]> {
+  const cb = bypassCache ? `&_ts=${Date.now()}` : ''
   try {
     return await ghFetch<GHDirEntry[]>(
       cfg,
-      `/repos/${cfg.owner}/${cfg.repo}/contents/${dirPath}?ref=${cfg.branch}`
+      `/repos/${cfg.owner}/${cfg.repo}/contents/${dirPath}?ref=${cfg.branch}${cb}`
     )
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
