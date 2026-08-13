@@ -55,10 +55,6 @@ function generateMeetings(plan: Pick<MeetingPlan, 'startDate' | 'endDate' | 'wee
   return meetings
 }
 
-function sortMeetings(meetings: PlannedMeeting[]): PlannedMeeting[] {
-  return [...meetings].sort((a, b) => a.date.localeCompare(b.date))
-}
-
 // ─── Plan form dialog ─────────────────────────────────────────────────────
 
 interface PlanFormProps {
