@@ -456,7 +456,9 @@ function PlanDetail({
     }
   }
 
-  const sortedMeetings = useMemo(() => sortMeetings(plan.meetings), [plan.meetings])
+  // Meetings are displayed in stored order so drag-and-drop reordering persists.
+  // sortMeetings is still used when (re)generating meetings from plan dates.
+  const displayMeetings = plan.meetings
 
   function updateMeetingDesc(id: string, desc: string) {
     onUpdate({ ...plan, meetings: plan.meetings.map(m => m.id === id ? { ...m, description: desc } : m) })
@@ -520,9 +522,20 @@ function PlanDetail({
 
   function onDragEnd(result: DropResult) {
     if (!result.destination) return
+    if (result.source.index === result.destination.index &&
+        result.source.droppableId === result.destination.droppableId) return
+
     const srcId = result.source.droppableId
     const dstId = result.destination.droppableId
-    if (result.type !== 'reading') return
+
+    // Reorder sessions in the list — splice to new position and save
+    if (result.type === 'meeting') {
+      const items = [...plan.meetings]
+      const [moved] = items.splice(result.source.index, 1)
+      items.splice(result.destination.index, 0, moved)
+      onUpdate({ ...plan, meetings: items })
+      return
+    }
 
     // dragging from pool → meeting
     if (srcId === 'readings-pool' && dstId.startsWith('meeting-')) {
@@ -585,12 +598,12 @@ function PlanDetail({
           {/* Meetings column */}
           <div className="flex-1 min-w-0">
             <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
-              <Calendar className="w-4 h-4" /> Reuniões <span className="text-gray-400 font-normal">({sortedMeetings.length})</span>
+              <Calendar className="w-4 h-4" /> Reuniões <span className="text-gray-400 font-normal">({displayMeetings.length})</span>
             </h2>
             <Droppable droppableId="meetings-list" type="meeting">
               {(listProvided) => (
                 <div ref={listProvided.innerRef} {...listProvided.droppableProps}>
-                  {sortedMeetings.map((meeting, index) => (
+                  {displayMeetings.map((meeting, index) => (
                     <Draggable key={meeting.id} draggableId={`drag-meeting-${meeting.id}`} index={index}>
                       {(dragProvided) => (
                         <MeetingCard
