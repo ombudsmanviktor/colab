@@ -236,6 +236,7 @@ export function Sugestoes() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const privateRecipientRef = useRef<HTMLDivElement>(null)
+  const dragCounterRef = useRef(0)
 
   // ── Scroll to bottom when messages change ──
   useEffect(() => {
@@ -365,17 +366,38 @@ export function Sugestoes() {
     setPendingAttachments(prev => prev.filter((_, i) => i !== idx))
   }
 
-  // ── Drag and drop ──
-  function handleDragOver(e: React.DragEvent) {
-    e.preventDefault()
-    setIsDragging(true)
-  }
-  function handleDragLeave() { setIsDragging(false) }
-  function handleDrop(e: React.DragEvent) {
-    e.preventDefault()
-    setIsDragging(false)
-    if (e.dataTransfer.files.length > 0) handleFiles(e.dataTransfer.files)
-  }
+  // ── Drag and drop — window-level so any area of the screen triggers it ──
+  useEffect(() => {
+    function onDragEnter(e: DragEvent) {
+      if (!e.dataTransfer?.types.includes('Files')) return
+      dragCounterRef.current++
+      if (dragCounterRef.current === 1) setIsDragging(true)
+    }
+    function onDragLeave() {
+      dragCounterRef.current--
+      if (dragCounterRef.current <= 0) {
+        dragCounterRef.current = 0
+        setIsDragging(false)
+      }
+    }
+    function onDragOver(e: DragEvent) { e.preventDefault() }
+    function onDrop(e: DragEvent) {
+      e.preventDefault()
+      dragCounterRef.current = 0
+      setIsDragging(false)
+      if (e.dataTransfer?.files.length) handleFiles(e.dataTransfer.files)
+    }
+    window.addEventListener('dragenter', onDragEnter)
+    window.addEventListener('dragleave', onDragLeave)
+    window.addEventListener('dragover', onDragOver)
+    window.addEventListener('drop', onDrop)
+    return () => {
+      window.removeEventListener('dragenter', onDragEnter)
+      window.removeEventListener('dragleave', onDragLeave)
+      window.removeEventListener('dragover', onDragOver)
+      window.removeEventListener('drop', onDrop)
+    }
+  }, [handleFiles])
 
   // ── Send mutation ──
   const sendMutation = useMutation({
@@ -465,15 +487,20 @@ export function Sugestoes() {
 
   return (
     <div
-      className={cn(
-        'flex flex-col h-full min-h-0',
-        isDragging && 'ring-2 ring-amber-400 ring-inset rounded-xl'
-      )}
+      className="flex flex-col h-full min-h-0"
       style={{ height: 'calc(100vh - 4rem)' }}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
     >
+      {/* Fullscreen drop overlay */}
+      {isDragging && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
+          <div className="absolute inset-0 bg-amber-500/10 dark:bg-amber-400/10 border-4 border-dashed border-amber-400 dark:border-amber-500 rounded-2xl m-4" />
+          <div className="relative flex flex-col items-center gap-3 px-10 py-8 rounded-2xl bg-white/90 dark:bg-gray-900/90 shadow-2xl border border-amber-200 dark:border-amber-700">
+            <Paperclip className="w-10 h-10 text-amber-500" />
+            <p className="text-lg font-semibold text-gray-800 dark:text-white">Solte para anexar</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Os arquivos serão adicionados à mensagem</p>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div className="flex-shrink-0 pb-4 border-b border-gray-100 dark:border-gray-800">
         <h1 className="text-xl font-bold text-gray-900 dark:text-white">Bate-Papo e Sugestões</h1>
