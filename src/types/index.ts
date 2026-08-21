@@ -151,14 +151,6 @@ export interface Orientacao {
   updated_at: string
 }
 
-export interface TarefaOrientacao {
-  id: string
-  orientacao_id: string
-  descricao: string
-  concluida: boolean
-  created_at: string
-}
-
 // ─── Linha do Tempo ───────────────────────────────────────────────────────
 
 export interface TimelineCategory {

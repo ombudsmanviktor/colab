@@ -21,7 +21,7 @@ import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { ToastContainer } from '@/components/ui/toast'
-import type { Orientacao, TarefaOrientacao, NotaReuniao, Anexo, LeituraDoc } from '@/types'
+import type { Orientacao, NotaReuniao, Anexo, LeituraDoc } from '@/types'
 import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
@@ -103,7 +103,7 @@ function exportExcel(orientacoes: Orientacao[]) {
   XLSX.writeFile(wb, 'orientacoes.xlsx')
 }
 
-function exportAllYAML(orientacoes: Orientacao[], tarefas: TarefaOrientacao[]) {
+function exportAllYAML(orientacoes: Orientacao[]) {
   const data = orientacoes.map(o => ({
     id: o.id,
     nome_orientando: o.nome_orientando,
@@ -121,12 +121,6 @@ function exportAllYAML(orientacoes: Orientacao[], tarefas: TarefaOrientacao[]) {
       ...(r.data ? { data: r.data } : {}),
       texto: r.texto,
       ...(r.anexo ? { anexo: { name: r.anexo.name, size: r.anexo.size, ...(r.anexo.path ? { path: r.anexo.path } : {}) } } : {}),
-    })),
-    tarefas: tarefas.filter(t => t.orientacao_id === o.id).map(t => ({
-      id: t.id,
-      descricao: t.descricao,
-      concluida: t.concluida,
-      created_at: t.created_at,
     })),
     ...(o.projeto_original ? {
       projeto_original: {
@@ -189,7 +183,6 @@ export function OrientacoesPage() {
   const { toasts, toast, dismiss } = useToast()
 
   const [orientacoes, setOrientacoes] = useState<Orientacao[]>([])
-  const [tarefas, setTarefas] = useState<TarefaOrientacao[]>([])
   const [loading, setLoading] = useState(true)
 
   const [showForm, setShowForm] = useState(false)
@@ -226,9 +219,8 @@ export function OrientacoesPage() {
   const [activeSubTab, setActiveSubTab] = useState<Record<string, string>>({})
 
   useEffect(() => {
-    loadOrientacoes().then(({ orientacoes: o, tarefas: t }) => {
+    loadOrientacoes().then(o => {
       setOrientacoes(o)
-      setTarefas(t)
       setLoading(false)
     }).catch(err => {
       toast({ title: 'Erro ao carregar', description: err.message, variant: 'destructive' })
@@ -259,14 +251,14 @@ export function OrientacoesPage() {
       )
       setOrientacoes(updated)
       const updatedO = updated.find(o => o.id === expanded)!
-      await saveOrientacaoFile(updatedO, tarefas)
+      await saveOrientacaoFile(updatedO)
       toast({ title: 'Documento anexado' })
     } catch (err) {
       toast({ title: 'Erro ao fazer upload', description: String(err), variant: 'destructive' })
     } finally {
       setUploadingDocId(null)
     }
-  }, [expanded, orientacoes, tarefas])
+  }, [expanded, orientacoes])
 
   useEffect(() => {
     if (!leiturasDndActive) return
@@ -372,7 +364,7 @@ export function OrientacoesPage() {
     }
 
     try {
-      await saveOrientacaoFile(orientacao, tarefas)
+      await saveOrientacaoFile(orientacao)
     } catch (err: unknown) {
       toast({ title: 'Erro ao salvar', description: String(err), variant: 'destructive' })
       return
@@ -397,7 +389,6 @@ export function OrientacoesPage() {
       return
     }
     setOrientacoes(prev => prev.filter(o => o.id !== id))
-    setTarefas(prev => prev.filter(t => t.orientacao_id !== id))
     toast({ title: 'Orientação removida' })
   }
 
@@ -406,7 +397,7 @@ export function OrientacoesPage() {
   async function handleArchive(o: Orientacao) {
     const updated: Orientacao = { ...o, arquivada: !o.arquivada, updated_at: new Date().toISOString() }
     try {
-      await saveOrientacaoFile(updated, tarefas)
+      await saveOrientacaoFile(updated)
       setOrientacoes(prev => prev.map(x => x.id === o.id ? updated : x))
       toast({ title: o.arquivada ? 'Orientação reativada' : 'Orientação arquivada' })
     } catch (err: unknown) {
@@ -427,7 +418,6 @@ export function OrientacoesPage() {
       if (!Array.isArray(raw)) throw new Error('Arquivo inválido: esperado array YAML')
 
       const importedOrientacoes: Orientacao[] = []
-      const importedTarefas: TarefaOrientacao[] = []
 
       for (const item of raw) {
         const o: Orientacao = {
@@ -453,15 +443,6 @@ export function OrientacoesPage() {
           updated_at: (item.updated_at as string) ?? new Date().toISOString(),
         }
         importedOrientacoes.push(o)
-
-        const itemTarefas: TarefaOrientacao[] = ((item.tarefas as Array<Record<string, unknown>>) ?? []).map((t) => ({
-          id: (t.id as string) ?? crypto.randomUUID(),
-          orientacao_id: o.id,
-          descricao: (t.descricao as string) ?? '',
-          concluida: (t.concluida as boolean) ?? false,
-          created_at: (t.created_at as string) ?? new Date().toISOString(),
-        }))
-        importedTarefas.push(...itemTarefas)
       }
 
       setOrientacoes(prev => {
@@ -469,14 +450,10 @@ export function OrientacoesPage() {
         importedOrientacoes.forEach(o => map.set(o.id, o))
         return Array.from(map.values())
       })
-      setTarefas(prev => {
-        const ids = new Set(importedTarefas.map(t => t.orientacao_id))
-        return [...prev.filter(t => !ids.has(t.orientacao_id)), ...importedTarefas]
-      })
 
       if (!isDemoMode) {
         for (const o of importedOrientacoes) {
-          await saveOrientacaoFile(o, importedTarefas.filter(t => t.orientacao_id === o.id))
+          await saveOrientacaoFile(o)
         }
       }
 
@@ -528,7 +505,7 @@ export function OrientacoesPage() {
     setNovaReuniaoFile(null)
     setActiveReuniaoId(null)
     const updatedO = updatedOrientacoes.find(o => o.id === orientacaoId)!
-    saveOrientacaoFile(updatedO, tarefas).catch(() => {})
+    saveOrientacaoFile(updatedO).catch(() => {})
   }
 
   function deleteReuniao(orientacaoId: string, reuniaoId: string) {
@@ -537,7 +514,7 @@ export function OrientacoesPage() {
     )
     setOrientacoes(updatedOrientacoes)
     const updatedO = updatedOrientacoes.find(o => o.id === orientacaoId)!
-    saveOrientacaoFile(updatedO, tarefas).catch(() => {})
+    saveOrientacaoFile(updatedO).catch(() => {})
   }
 
   function deleteReuniaoAnexo(orientacaoId: string, reuniaoId: string) {
@@ -550,7 +527,7 @@ export function OrientacoesPage() {
     )
     setOrientacoes(updatedOrientacoes)
     const updatedO = updatedOrientacoes.find(o => o.id === orientacaoId)!
-    saveOrientacaoFile(updatedO, tarefas).catch(() => {})
+    saveOrientacaoFile(updatedO).catch(() => {})
   }
 
   /* ── Leituras (text) ── */
@@ -565,7 +542,7 @@ export function OrientacoesPage() {
     setNovaLeitura('')
     setActiveLeituraId(null)
     const updatedO = updatedOrientacoes.find(o => o.id === orientacaoId)!
-    saveOrientacaoFile(updatedO, tarefas).catch(() => {})
+    saveOrientacaoFile(updatedO).catch(() => {})
   }
 
   function deleteLeitura(orientacaoId: string, idx: number) {
@@ -575,7 +552,7 @@ export function OrientacoesPage() {
     )
     setOrientacoes(updatedOrientacoes)
     const updatedO = updatedOrientacoes.find(o => o.id === orientacaoId)!
-    saveOrientacaoFile(updatedO, tarefas).catch(() => {})
+    saveOrientacaoFile(updatedO).catch(() => {})
   }
 
   /* ── Leituras (documents) ── */
@@ -587,7 +564,7 @@ export function OrientacoesPage() {
     )
     setOrientacoes(updatedOrientacoes)
     const updatedO = updatedOrientacoes.find(o => o.id === orientacaoId)!
-    saveOrientacaoFile(updatedO, tarefas).catch(() => {})
+    saveOrientacaoFile(updatedO).catch(() => {})
   }
 
   async function handleViewDoc(doc: LeituraDoc) {
@@ -621,7 +598,7 @@ export function OrientacoesPage() {
     setNovaLink('')
     setActiveLinkId(null)
     const updatedO = updatedOrientacoes.find(o => o.id === orientacaoId)!
-    saveOrientacaoFile(updatedO, tarefas).catch(() => {})
+    saveOrientacaoFile(updatedO).catch(() => {})
   }
 
   function deleteLink(orientacaoId: string, idx: number) {
@@ -631,7 +608,7 @@ export function OrientacoesPage() {
     )
     setOrientacoes(updatedOrientacoes)
     const updatedO = updatedOrientacoes.find(o => o.id === orientacaoId)!
-    saveOrientacaoFile(updatedO, tarefas).catch(() => {})
+    saveOrientacaoFile(updatedO).catch(() => {})
   }
 
   /* ── File pickers ── */
@@ -701,7 +678,7 @@ export function OrientacoesPage() {
           <Button variant="outline" size="sm" onClick={() => exportPDF(orientacoes)}>
             <FileText className="w-4 h-4" /> PDF
           </Button>
-          <Button variant="outline" size="sm" onClick={() => exportAllYAML(orientacoes, tarefas)} title="Exporta todas as orientações em YAML">
+          <Button variant="outline" size="sm" onClick={() => exportAllYAML(orientacoes)} title="Exporta todas as orientações em YAML">
             <Download className="w-4 h-4" /> Exportar Todas
           </Button>
           <Button

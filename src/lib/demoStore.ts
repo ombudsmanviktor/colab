@@ -1,6 +1,6 @@
 // ─── In-memory demo store ──────────────────────────────────────────────────
 
-import type { UsersIndex, UserTasks, UserProfile, OrdemDoDia, AtaDecisao, Leitura, Producao, SugestaoMessage, Orientacao, TarefaOrientacao, TimelineData, TimelineEvent, TimelineCategory, CalloutData, WikiEntry, MeetingPlan } from '@/types'
+import type { UsersIndex, UserTasks, UserProfile, OrdemDoDia, AtaDecisao, Leitura, Producao, SugestaoMessage, Orientacao, TimelineData, TimelineEvent, TimelineCategory, CalloutData, WikiEntry, MeetingPlan } from '@/types'
 
 export const DEMO_EMAIL = 'demo@colab.app'
 export const DEMO_EMAIL2 = 'ana@grupo.edu.br'
@@ -241,12 +241,6 @@ const DEMO_ORIENTACOES: Orientacao[] = [
   },
 ]
 
-const DEMO_TAREFAS_ORIENTACAO: TarefaOrientacao[] = [
-  { id: 'to1', orientacao_id: 'demo-ori-1', descricao: 'Enviar capítulo 3 revisado', concluida: false, created_at: NOW },
-  { id: 'to2', orientacao_id: 'demo-ori-1', descricao: 'Agendar reunião de qualificação', concluida: true, created_at: NOW },
-  { id: 'to3', orientacao_id: 'demo-ori-2', descricao: 'Definir corpus de análise', concluida: false, created_at: NOW },
-  { id: 'to4', orientacao_id: 'demo-ori-2', descricao: 'Ler Van Dijk capítulos 3-5', concluida: false, created_at: NOW },
-]
 
 const DEMO_TIMELINE_CATEGORIES: TimelineCategory[] = [
   { id: 'tc1', name: 'Publicação', color: 'indigo' },
@@ -415,7 +409,6 @@ interface DemoStore {
   producoes: Producao[]
   sugestoes: SugestaoMessage[]
   orientacoes: Orientacao[]
-  tarefasOrientacao: TarefaOrientacao[]
   timeline: TimelineData
   callout: CalloutData
   wiki: WikiEntry[]
@@ -433,7 +426,6 @@ function buildStore(): DemoStore {
     producoes: JSON.parse(JSON.stringify(DEMO_PRODUCOES)),
     sugestoes: JSON.parse(JSON.stringify(DEMO_SUGESTOES)),
     orientacoes: JSON.parse(JSON.stringify(DEMO_ORIENTACOES)),
-    tarefasOrientacao: JSON.parse(JSON.stringify(DEMO_TAREFAS_ORIENTACAO)),
     timeline: JSON.parse(JSON.stringify({ events: DEMO_TIMELINE_EVENTS, categories: DEMO_TIMELINE_CATEGORIES })),
     callout: JSON.parse(JSON.stringify(DEMO_CALLOUT)),
     wiki: JSON.parse(JSON.stringify(DEMO_WIKI)),
@@ -511,24 +503,16 @@ export function demoSaveSugestao(msg: SugestaoMessage): void {
 }
 export function demoDeleteSugestao(id: string): void { _store.sugestoes = _store.sugestoes.filter(x => x.id !== id) }
 
-export function demoLoadOrientacoes(): { orientacoes: Orientacao[]; tarefas: TarefaOrientacao[] } {
-  return {
-    orientacoes: JSON.parse(JSON.stringify(_store.orientacoes)),
-    tarefas: JSON.parse(JSON.stringify(_store.tarefasOrientacao)),
-  }
+export function demoLoadOrientacoes(): Orientacao[] {
+  return JSON.parse(JSON.stringify(_store.orientacoes))
 }
-export function demoSaveOrientacao(o: Orientacao, allTarefas: TarefaOrientacao[]): void {
+export function demoSaveOrientacao(o: Orientacao): void {
   _store.orientacoes = _store.orientacoes.some(x => x.id === o.id)
     ? _store.orientacoes.map(x => x.id === o.id ? JSON.parse(JSON.stringify(o)) : x)
     : [JSON.parse(JSON.stringify(o)), ..._store.orientacoes]
-  _store.tarefasOrientacao = [
-    ..._store.tarefasOrientacao.filter(t => t.orientacao_id !== o.id),
-    ...allTarefas.filter(t => t.orientacao_id === o.id).map(t => JSON.parse(JSON.stringify(t))),
-  ]
 }
 export function demoDeleteOrientacao(id: string): void {
   _store.orientacoes = _store.orientacoes.filter(x => x.id !== id)
-  _store.tarefasOrientacao = _store.tarefasOrientacao.filter(t => t.orientacao_id !== id)
 }
 
 export function demoLoadTimeline(): TimelineData {

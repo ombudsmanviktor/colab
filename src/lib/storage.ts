@@ -15,7 +15,7 @@ import {
   getFileAtCommit,
   type GitHubConfig,
 } from './github'
-import type { UsersIndex, UserTasks, UserProfile, OrdemDoDia, AtaDecisao, Leitura, Producao, SugestaoMessage, Orientacao, TarefaOrientacao, Anexo, TimelineData, CalloutData, WikiEntry, MeetingPlan } from '@/types'
+import type { UsersIndex, UserTasks, UserProfile, OrdemDoDia, AtaDecisao, Leitura, Producao, SugestaoMessage, Orientacao, Anexo, TimelineData, CalloutData, WikiEntry, MeetingPlan } from '@/types'
 import type { AppRepoConfig } from '@/lib/appConfig'
 import { emailSlug, generateId } from './utils'
 import {
@@ -453,7 +453,6 @@ type StoredAnexo = { id: string; name: string; size: number; type: string; path:
 
 type StoredOrientacao = Omit<Orientacao, 'projeto_original'> & {
   projeto_original?: StoredAnexo
-  tarefas: Omit<TarefaOrientacao, 'orientacao_id'>[]
 }
 
 function storedToAnexo(sa: StoredAnexo): Anexo {
@@ -464,36 +463,30 @@ function anexoToStored(a: Anexo): StoredAnexo {
   return { id: a.id, name: a.name, size: a.size, type: a.type, path: a.path ?? '' }
 }
 
-export async function loadOrientacoes(): Promise<{ orientacoes: Orientacao[]; tarefas: TarefaOrientacao[] }> {
+export async function loadOrientacoes(): Promise<Orientacao[]> {
   if (isDemoMode()) return demoLoadOrientacoes()
   try {
     const entries = await listDirectory(cfg(), 'orientacoes')
     const files = entries.filter(e => e.type === 'file' && e.name.endsWith('.yaml'))
     const docs = await Promise.all(files.map(f => readYaml<StoredOrientacao>(`orientacoes/${f.name}`)))
     const orientacoes: Orientacao[] = []
-    const tarefas: TarefaOrientacao[] = []
     for (const doc of docs) {
       if (!doc) continue
-      const { tarefas: docTarefas, projeto_original, ...rest } = doc
+      const { projeto_original, ...rest } = doc
       orientacoes.push({ ...rest, projeto_original: projeto_original ? storedToAnexo(projeto_original) : undefined })
-      for (const t of docTarefas ?? []) {
-        tarefas.push({ ...t, orientacao_id: doc.id })
-      }
     }
-    return { orientacoes, tarefas }
+    return orientacoes
   } catch {
-    return { orientacoes: [], tarefas: [] }
+    return []
   }
 }
 
-export async function saveOrientacaoFile(orientacao: Orientacao, allTarefas: TarefaOrientacao[]): Promise<void> {
-  if (isDemoMode()) { demoSaveOrientacao(orientacao, allTarefas); return }
-  const myTarefas = allTarefas.filter(t => t.orientacao_id === orientacao.id)
+export async function saveOrientacaoFile(orientacao: Orientacao): Promise<void> {
+  if (isDemoMode()) { demoSaveOrientacao(orientacao); return }
   const { projeto_original, ...rest } = orientacao
   const doc: StoredOrientacao = {
     ...rest,
     ...(projeto_original ? { projeto_original: anexoToStored(projeto_original) } : {}),
-    tarefas: myTarefas.map(({ orientacao_id: _oid, ...t }) => t),
   }
   await writeYaml(`orientacoes/${orientacao.id}.yaml`, doc, `Update orientação ${orientacao.id}`)
 }
