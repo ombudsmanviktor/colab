@@ -298,9 +298,6 @@ export function OrientacoesPage() {
   const [showArchived, setShowArchived] = useState(false)
   const [pageTab, setPageTab] = useState<'orientandos' | 'tarefas'>('orientandos')
 
-  const [newTarefa, setNewTarefa] = useState('')
-  const [activeTarefaId, setActiveTarefaId] = useState<string | null>(null)
-
   const [activeReuniaoId, setActiveReuniaoId] = useState<string | null>(null)
   const [novaReuniaoData, setNovaReuniaoData] = useState('')
   const [novaReuniaoTexto, setNovaReuniaoTexto] = useState('')
@@ -587,31 +584,6 @@ export function OrientacoesPage() {
     } finally {
       setImporting(false)
     }
-  }
-
-  /* ── Tarefas (per-orientando) ── */
-
-  async function addTarefa(orientacaoId: string) {
-    if (!newTarefa.trim()) return
-    const t: TarefaOrientacao = {
-      id: crypto.randomUUID(),
-      orientacao_id: orientacaoId,
-      descricao: newTarefa,
-      concluida: false,
-      created_at: new Date().toISOString(),
-    }
-    const updatedTarefas = [...tarefas, t]
-    setTarefas(updatedTarefas)
-    setNewTarefa('')
-    const orientacao = orientacoes.find(o => o.id === orientacaoId)!
-    await saveOrientacaoFile(orientacao, updatedTarefas).catch(() => {})
-  }
-
-  async function toggleTarefa(t: TarefaOrientacao) {
-    const updatedTarefas = tarefas.map(x => x.id === t.id ? { ...x, concluida: !x.concluida } : x)
-    setTarefas(updatedTarefas)
-    const orientacao = orientacoes.find(o => o.id === t.orientacao_id)!
-    await saveOrientacaoFile(orientacao, updatedTarefas).catch(() => {})
   }
 
   /* ── Global tasks (VisaoGeral) ── */
