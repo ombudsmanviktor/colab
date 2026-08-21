@@ -2,14 +2,14 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import {
   Plus, GraduationCap, Pencil, Trash2, FileText, ChevronDown, ChevronUp,
   BookOpen, Link2, Paperclip, Download, X, CalendarDays, Archive, ArchiveRestore,
-  Upload, Loader2, Eye, CheckSquare,
+  Upload, Loader2, Eye,
 } from 'lucide-react'
 import { dump, load } from 'js-yaml'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/hooks/useToast'
 import {
   loadOrientacoes, saveOrientacaoFile, deleteOrientacaoFile, uploadAnexo,
-  loadAllUserTasks, saveUserTasks, downloadPlanPdf, openDocBlob,
+  downloadPlanPdf, openDocBlob,
 } from '@/lib/storage'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -21,7 +21,7 @@ import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { ToastContainer } from '@/components/ui/toast'
-import type { Orientacao, TarefaOrientacao, NotaReuniao, Anexo, LeituraDoc, UserTasks, Task } from '@/types'
+import type { Orientacao, TarefaOrientacao, NotaReuniao, Anexo, LeituraDoc } from '@/types'
 import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
@@ -182,107 +182,14 @@ const emptyForm: OrientacaoForm = {
   exame_qualificacao: false,
 }
 
-/* ─── Tarefas (VisaoGeral) sub-component ────────────────────────────── */
-
-interface TarefasViewProps {
-  userTasks: UserTasks[]
-  currentEmail: string
-  onToggle: (email: string, task: Task) => void
-  onAdd: (title: string) => void
-}
-
-function TarefasView({ userTasks, currentEmail, onToggle, onAdd }: TarefasViewProps) {
-  const [newTaskTitle, setNewTaskTitle] = useState('')
-  const [showCompleted, setShowCompleted] = useState(false)
-
-  function handleAdd() {
-    const t = newTaskTitle.trim()
-    if (!t) return
-    onAdd(t)
-    setNewTaskTitle('')
-  }
-
-  return (
-    <div className="space-y-6">
-      {userTasks.length === 0 && (
-        <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-6">Nenhuma tarefa cadastrada</p>
-      )}
-      {userTasks.map(ut => {
-        const active = ut.tasks.filter(t => !t.completed).sort((a, b) => a.order - b.order)
-        const completed = ut.tasks.filter(t => t.completed)
-        if (active.length === 0 && completed.length === 0) return null
-        return (
-          <div key={ut.email}>
-            <p className="text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">
-              {ut.email}
-            </p>
-            <div className="space-y-1">
-              {active.map(t => (
-                <div key={t.id} className="flex items-start gap-2.5 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">
-                  <Checkbox
-                    checked={false}
-                    onCheckedChange={() => onToggle(ut.email, t)}
-                    className="mt-0.5 flex-shrink-0"
-                  />
-                  <span className="text-sm text-gray-700 dark:text-gray-200 leading-snug flex-1">{t.title}</span>
-                  {t.dueDate && (
-                    <span className="text-xs text-gray-400 dark:text-gray-500 flex-shrink-0">{t.dueDate}</span>
-                  )}
-                </div>
-              ))}
-              {completed.length > 0 && (
-                <button
-                  className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 px-2 py-1 mt-1"
-                  onClick={() => setShowCompleted(v => !v)}
-                >
-                  {showCompleted ? '▲' : '▼'} {completed.length} concluída(s)
-                </button>
-              )}
-              {showCompleted && completed.map(t => (
-                <div key={t.id} className="flex items-start gap-2.5 p-2 rounded-lg opacity-50">
-                  <Checkbox
-                    checked
-                    onCheckedChange={() => onToggle(ut.email, t)}
-                    className="mt-0.5 flex-shrink-0"
-                  />
-                  <span className="text-sm text-gray-500 dark:text-gray-400 line-through leading-snug flex-1">{t.title}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )
-      })}
-
-      {/* Add task for current user */}
-      <div className="flex gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
-        <Input
-          value={newTaskTitle}
-          onChange={e => setNewTaskTitle(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') handleAdd() }}
-          placeholder="Nova tarefa (Enter para adicionar)"
-          className="flex-1"
-        />
-        <Button size="sm" variant="outline" onClick={handleAdd}>
-          <Plus className="w-4 h-4" />
-        </Button>
-      </div>
-      <p className="text-xs text-gray-400 dark:text-gray-500">
-        Adicionando para: <span className="font-medium">{currentEmail}</span>
-      </p>
-    </div>
-  )
-}
-
 /* ─── Component ──────────────────────────────────────────────────────── */
 
 export function OrientacoesPage() {
-  const { isDemoMode, session } = useAuth()
+  const { isDemoMode } = useAuth()
   const { toasts, toast, dismiss } = useToast()
-  const currentEmail = session?.email ?? ''
 
   const [orientacoes, setOrientacoes] = useState<Orientacao[]>([])
   const [tarefas, setTarefas] = useState<TarefaOrientacao[]>([])
-  const [userTasks, setUserTasks] = useState<UserTasks[]>([])
   const [loading, setLoading] = useState(true)
 
   const [showForm, setShowForm] = useState(false)
@@ -296,10 +203,6 @@ export function OrientacoesPage() {
 
   const [expanded, setExpanded] = useState<string | null>(null)
   const [showArchived, setShowArchived] = useState(false)
-  const [pageTab, setPageTab] = useState<'orientandos' | 'tarefas'>('orientandos')
-
-  const [newTarefa, setNewTarefa] = useState('')
-  const [activeTarefaId, setActiveTarefaId] = useState<string | null>(null)
 
   const [activeReuniaoId, setActiveReuniaoId] = useState<string | null>(null)
   const [novaReuniaoData, setNovaReuniaoData] = useState('')
@@ -323,13 +226,9 @@ export function OrientacoesPage() {
   const [activeSubTab, setActiveSubTab] = useState<Record<string, string>>({})
 
   useEffect(() => {
-    Promise.all([
-      loadOrientacoes(),
-      loadAllUserTasks(),
-    ]).then(([{ orientacoes: o, tarefas: t }, ut]) => {
+    loadOrientacoes().then(({ orientacoes: o, tarefas: t }) => {
       setOrientacoes(o)
       setTarefas(t)
-      setUserTasks(ut)
       setLoading(false)
     }).catch(err => {
       toast({ title: 'Erro ao carregar', description: err.message, variant: 'destructive' })
@@ -589,74 +488,7 @@ export function OrientacoesPage() {
     }
   }
 
-  /* ── Tarefas (per-orientando) ── */
 
-  async function addTarefa(orientacaoId: string) {
-    if (!newTarefa.trim()) return
-    const t: TarefaOrientacao = {
-      id: crypto.randomUUID(),
-      orientacao_id: orientacaoId,
-      descricao: newTarefa,
-      concluida: false,
-      created_at: new Date().toISOString(),
-    }
-    const updatedTarefas = [...tarefas, t]
-    setTarefas(updatedTarefas)
-    setNewTarefa('')
-    const orientacao = orientacoes.find(o => o.id === orientacaoId)!
-    await saveOrientacaoFile(orientacao, updatedTarefas).catch(() => {})
-  }
-
-  async function toggleTarefa(t: TarefaOrientacao) {
-    const updatedTarefas = tarefas.map(x => x.id === t.id ? { ...x, concluida: !x.concluida } : x)
-    setTarefas(updatedTarefas)
-    const orientacao = orientacoes.find(o => o.id === t.orientacao_id)!
-    await saveOrientacaoFile(orientacao, updatedTarefas).catch(() => {})
-  }
-
-  /* ── Global tasks (VisaoGeral) ── */
-
-  async function handleToggleGlobalTask(email: string, task: Task) {
-    const now = new Date().toISOString()
-    const updatedTask: Task = {
-      ...task,
-      completed: !task.completed,
-      completedAt: !task.completed ? now : undefined,
-    }
-    const ut = userTasks.find(u => u.email === email)
-    if (!ut) return
-    const updatedUT: UserTasks = {
-      ...ut,
-      tasks: ut.tasks.map(t => t.id === task.id ? updatedTask : t),
-    }
-    setUserTasks(prev => prev.map(u => u.email === email ? updatedUT : u))
-    await saveUserTasks(updatedUT).catch(err => {
-      toast({ title: 'Erro ao salvar tarefa', description: String(err), variant: 'destructive' })
-    })
-  }
-
-  async function handleAddGlobalTask(title: string) {
-    const now = new Date().toISOString()
-    const newTask: Task = {
-      id: crypto.randomUUID(),
-      title,
-      completed: false,
-      order: Date.now(),
-      createdAt: now,
-    }
-    const existing = userTasks.find(u => u.email === currentEmail)
-    const updatedUT: UserTasks = existing
-      ? { ...existing, tasks: [...existing.tasks, newTask] }
-      : { email: currentEmail, tasks: [newTask], lastAccess: now }
-    setUserTasks(prev =>
-      existing
-        ? prev.map(u => u.email === currentEmail ? updatedUT : u)
-        : [...prev, updatedUT]
-    )
-    await saveUserTasks(updatedUT).catch(err => {
-      toast({ title: 'Erro ao salvar tarefa', description: String(err), variant: 'destructive' })
-    })
-  }
 
   /* ── Reuniões ── */
 
@@ -908,54 +740,8 @@ export function OrientacoesPage() {
         ))}
       </div>
 
-      {/* ── Top-level tabs: Orientandos | Tarefas ── */}
-      <div className="flex gap-1 border-b border-gray-200 dark:border-gray-700">
-        <button
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            pageTab === 'orientandos'
-              ? 'border-amber-500 text-amber-700 dark:text-amber-400'
-              : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
-          }`}
-          onClick={() => setPageTab('orientandos')}
-        >
-          Orientandos
-        </button>
-        <button
-          className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            pageTab === 'tarefas'
-              ? 'border-amber-500 text-amber-700 dark:text-amber-400'
-              : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
-          }`}
-          onClick={() => setPageTab('tarefas')}
-        >
-          <CheckSquare className="w-3.5 h-3.5" />
-          Tarefas
-        </button>
-      </div>
-
-      {/* ── Tarefas (VisaoGeral integration) ── */}
-      {pageTab === 'tarefas' && (
-        <Card>
-          <CardContent className="pt-5">
-            {loading ? (
-              <div className="flex justify-center py-8">
-                <div className="w-6 h-6 border-4 border-gray-200 dark:border-gray-700 border-t-amber-500 rounded-full animate-spin" />
-              </div>
-            ) : (
-              <TarefasView
-                userTasks={userTasks}
-                currentEmail={currentEmail}
-                onToggle={handleToggleGlobalTask}
-                onAdd={handleAddGlobalTask}
-              />
-            )}
-          </CardContent>
-        </Card>
-      )}
-
       {/* ── Orientandos list ── */}
-      {pageTab === 'orientandos' && (
-        loading ? (
+      {loading ? (
           <div className="flex justify-center py-16">
             <div className="w-8 h-8 border-4 border-gray-200 dark:border-gray-700 border-t-amber-500 rounded-full animate-spin" />
           </div>
@@ -984,8 +770,6 @@ export function OrientacoesPage() {
                 <div className="space-y-3">
                   {activeOrientacoes.filter(o => o.curso === curso).map(o => {
                     const isOpen = expanded === o.id
-                    const myTarefas = tarefas.filter(t => t.orientacao_id === o.id)
-                    const pendingTarefas = myTarefas.filter(t => !t.concluida).length
                     const reunioes = o.reunioes ?? []
                     const leiturasDocs = o.leituras_docs ?? []
                     const sortedReunioes = [...reunioes].sort((a, b) => {
@@ -1031,11 +815,6 @@ export function OrientacoesPage() {
                             </div>
                           </div>
                           <div className="flex items-center gap-2 flex-shrink-0">
-                            {pendingTarefas > 0 && (
-                              <Badge variant="warning">
-                                {pendingTarefas} pendente{pendingTarefas !== 1 ? 's' : ''}
-                              </Badge>
-                            )}
                             <Button variant="ghost" size="icon" onClick={e => { e.stopPropagation(); openEdit(o) }} title="Editar">
                               <Pencil className="w-3.5 h-3.5" />
                             </Button>
@@ -1062,7 +841,6 @@ export function OrientacoesPage() {
                                   Leituras ({(o.leituras ?? []).length + leiturasDocs.length})
                                 </TabsTrigger>
                                 <TabsTrigger value="links">Links ({(o.links_documentos ?? []).length})</TabsTrigger>
-                                <TabsTrigger value="tarefas">Tarefas ({myTarefas.length})</TabsTrigger>
                                 {o.projeto_original && <TabsTrigger value="projeto">Projeto</TabsTrigger>}
                               </TabsList>
 
@@ -1282,35 +1060,6 @@ export function OrientacoesPage() {
                                 </div>
                               </TabsContent>
 
-                              {/* ── Tarefas (per-orientando) ── */}
-                              <TabsContent value="tarefas">
-                                <div className="space-y-2 mb-3">
-                                  {myTarefas.map(t => (
-                                    <div key={t.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">
-                                      <Checkbox checked={t.concluida} onCheckedChange={() => toggleTarefa(t)} />
-                                      <span className={`text-sm ${t.concluida ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-700 dark:text-gray-200'}`}>
-                                        {t.descricao}
-                                      </span>
-                                    </div>
-                                  ))}
-                                  {myTarefas.length === 0 && (
-                                    <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-2">Nenhuma tarefa cadastrada</p>
-                                  )}
-                                </div>
-                                <div className="flex gap-2" onClick={e => e.stopPropagation()}>
-                                  <Input
-                                    value={activeTarefaId === o.id ? newTarefa : ''}
-                                    onChange={e => { setActiveTarefaId(o.id); setNewTarefa(e.target.value) }}
-                                    onKeyDown={e => { if (e.key === 'Enter') addTarefa(o.id) }}
-                                    placeholder="Nova tarefa (Enter para adicionar)"
-                                    className="flex-1"
-                                  />
-                                  <Button size="sm" variant="outline" onClick={() => { setActiveTarefaId(o.id); addTarefa(o.id) }}>
-                                    <Plus className="w-4 h-4" />
-                                  </Button>
-                                </div>
-                              </TabsContent>
-
                               {/* ── Projeto Original ── */}
                               {o.projeto_original && (
                                 <TabsContent value="projeto">
@@ -1380,9 +1129,7 @@ export function OrientacoesPage() {
                 )}
               </div>
             )}
-          </>
-        )
-      )}
+
 
       {/* ── Form Dialog ── */}
       <Dialog open={showForm} onOpenChange={setShowForm}>
