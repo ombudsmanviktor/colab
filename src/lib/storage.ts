@@ -730,6 +730,13 @@ export async function downloadPlanPdf(pdfPath: string, filename: string): Promis
   URL.revokeObjectURL(objectUrl)
 }
 
+export async function openDocBlob(path: string): Promise<void> {
+  const blob = await readRawBlob(cfg(), path)
+  const url = URL.createObjectURL(blob)
+  window.open(url, '_blank')
+  setTimeout(() => URL.revokeObjectURL(url), 30000)
+}
+
 export async function saveMeetingPlan(p: MeetingPlan): Promise<void> {
   if (isDemoMode()) { demoSaveMeetingPlan(p); return }
   await writeYaml(`planejamento/${p.id}.yaml`, p, `Save plan ${p.id}`)

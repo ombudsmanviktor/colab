@@ -126,6 +126,13 @@ export interface NotaReuniao {
   anexo?: Anexo
 }
 
+export interface LeituraDoc {
+  id: string
+  name: string
+  size: number
+  path: string
+}
+
 export interface Orientacao {
   id: string
   nome_orientando: string
@@ -136,6 +143,7 @@ export interface Orientacao {
   exame_qualificacao?: boolean
   arquivada?: boolean
   leituras?: string[]
+  leituras_docs?: LeituraDoc[]
   reunioes?: NotaReuniao[]
   links_documentos?: string[]
   projeto_original?: Anexo
