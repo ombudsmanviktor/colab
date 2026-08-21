@@ -717,20 +717,20 @@ export async function deletePlanPdf(readingId: string): Promise<void> {
 }
 
 export async function downloadPlanPdf(pdfPath: string, filename: string): Promise<void> {
-  const file = await readFile(cfg(), pdfPath)
-  const base64 = file.content.replace(/\n/g, '')
-  const binStr = atob(base64)
-  const bytes = new Uint8Array(binStr.length)
-  for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i)
-  const blob = new Blob([bytes], { type: 'application/pdf' })
-  const url = URL.createObjectURL(blob)
+  // Use raw.githubusercontent.com directly — the Contents API truncates files > 1 MB.
+  const c = cfg()
+  const url = getRawUrl(c, pdfPath)
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${c.token}` } })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  const blob = await res.blob()
+  const objectUrl = URL.createObjectURL(blob)
   const a = document.createElement('a')
-  a.href = url
+  a.href = objectUrl
   a.download = filename
   document.body.appendChild(a)
   a.click()
   document.body.removeChild(a)
-  URL.revokeObjectURL(url)
+  URL.revokeObjectURL(objectUrl)
 }
 
 export async function saveMeetingPlan(p: MeetingPlan): Promise<void> {
