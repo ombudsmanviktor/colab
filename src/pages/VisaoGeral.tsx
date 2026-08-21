@@ -239,13 +239,20 @@ function TaskRow({
   autoFocus: boolean
   allFronts: string[]
 }) {
-  const titleRef = useRef<HTMLInputElement>(null)
+  const titleRef = useRef<HTMLTextAreaElement>(null)
   const frontRef = useRef<HTMLInputElement>(null)
   const [editingDate, setEditingDate] = useState(false)
   const [editingFront, setEditingFront] = useState(false)
   const [frontDraft, setFrontDraft] = useState(task.front ?? '')
 
   useEffect(() => { if (autoFocus) titleRef.current?.focus() }, [autoFocus])
+  // Auto-resize textarea to fit content
+  useEffect(() => {
+    const ta = titleRef.current
+    if (!ta) return
+    ta.style.height = 'auto'
+    ta.style.height = ta.scrollHeight + 'px'
+  }, [task.title])
   useEffect(() => { if (editingFront) frontRef.current?.select() }, [editingFront])
   useEffect(() => { if (!editingFront) setFrontDraft(task.front ?? '') }, [task.front, editingFront])
 
@@ -267,11 +274,11 @@ function TaskRow({
       className={`group py-1.5 px-2 rounded-md transition-colors ${isDragging ? 'bg-amber-50 shadow-md' : ''} ${task.completed ? 'opacity-50' : ''}`}
     >
       {/* Main line */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-start gap-2">
         {/* Grip or spacer */}
         <div
           {...(provided.dragHandleProps ?? {})}
-          className={`w-3.5 flex-shrink-0 ${canEdit ? 'opacity-0 group-hover:opacity-40 cursor-grab' : ''}`}
+          className={`w-3.5 flex-shrink-0 mt-0.5 ${canEdit ? 'opacity-0 group-hover:opacity-40 cursor-grab' : ''}`}
         >
           {canEdit && <GripVertical className="w-3.5 h-3.5 text-gray-400" />}
         </div>
@@ -280,7 +287,7 @@ function TaskRow({
         <button
           onClick={onToggle}
           disabled={!canEdit}
-          className={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center transition-colors ${
+          className={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center transition-colors mt-0.5 ${
             task.completed
               ? 'bg-amber-500 border-amber-500 text-white'
               : 'border-gray-300 dark:border-gray-600 hover:border-amber-400'
@@ -290,15 +297,22 @@ function TaskRow({
         </button>
 
         {/* Title */}
-        <input
+        <textarea
           ref={titleRef}
           readOnly={!canEdit}
-          className={`flex-1 bg-transparent text-sm text-gray-800 dark:text-gray-200 outline-none min-w-0 ${
+          rows={1}
+          className={`flex-1 bg-transparent text-sm text-gray-800 dark:text-gray-200 outline-none min-w-0 resize-none overflow-hidden leading-5 ${
             task.completed ? 'line-through text-gray-400' : ''
           } ${canEdit ? 'focus:bg-amber-50 dark:focus:bg-amber-950/20 rounded px-1 -mx-1' : ''}`}
           value={task.title}
-          onChange={e => onChangeTitle(e.target.value)}
+          onChange={e => {
+            onChangeTitle(e.target.value)
+            const ta = e.target
+            ta.style.height = 'auto'
+            ta.style.height = ta.scrollHeight + 'px'
+          }}
           onBlur={onBlur}
+          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onBlur() } }}
           placeholder="Tarefa…"
         />
 
@@ -306,7 +320,7 @@ function TaskRow({
         {canEdit && (
           <button
             onClick={onDelete}
-            className="opacity-0 group-hover:opacity-60 hover:!opacity-100 p-1 rounded hover:bg-red-50 text-gray-300 hover:text-red-400 transition-all flex-shrink-0"
+            className="opacity-0 group-hover:opacity-60 hover:!opacity-100 p-1 rounded hover:bg-red-50 text-gray-300 hover:text-red-400 transition-all flex-shrink-0 mt-0.5"
           >
             <Trash2 className="w-3.5 h-3.5" />
           </button>
