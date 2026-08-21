@@ -134,6 +134,27 @@ export function getRawUrl(cfg: GitHubConfig, filePath: string): string {
   return `https://raw.githubusercontent.com/${cfg.owner}/${cfg.repo}/${cfg.branch}/${filePath}`
 }
 
+// Fetch a file's raw binary via the Git Blobs API (no 1 MB size limit, CORS-safe).
+export async function readRawBlob(cfg: GitHubConfig, filePath: string): Promise<Blob> {
+  // Step 1: get the blob SHA from the Contents API (works even for large files)
+  const meta = await ghFetch<{ sha: string }>(
+    cfg,
+    `/repos/${cfg.owner}/${cfg.repo}/contents/${filePath}?ref=${cfg.branch}`
+  )
+  // Step 2: fetch raw bytes via the Blobs API with the raw accept header
+  const res = await fetch(
+    `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/git/blobs/${meta.sha}`,
+    {
+      headers: {
+        Authorization: `Bearer ${cfg.token}`,
+        Accept: 'application/vnd.github.v3.raw',
+      },
+    }
+  )
+  if (!res.ok) throw new Error(`GitHub blob fetch failed: HTTP ${res.status}`)
+  return res.blob()
+}
+
 export async function deleteFile(
   cfg: GitHubConfig,
   filePath: string,

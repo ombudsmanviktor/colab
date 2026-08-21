@@ -10,6 +10,7 @@ import {
   listDirectory,
   decodeContent,
   getRawUrl,
+  readRawBlob,
   getFileCommits,
   getFileAtCommit,
   type GitHubConfig,
@@ -717,12 +718,8 @@ export async function deletePlanPdf(readingId: string): Promise<void> {
 }
 
 export async function downloadPlanPdf(pdfPath: string, filename: string): Promise<void> {
-  // Use raw.githubusercontent.com directly — the Contents API truncates files > 1 MB.
-  const c = cfg()
-  const url = getRawUrl(c, pdfPath)
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${c.token}` } })
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  const blob = await res.blob()
+  // Git Blobs API: no 1 MB limit, CORS-safe (goes through api.github.com).
+  const blob = await readRawBlob(cfg(), pdfPath)
   const objectUrl = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = objectUrl
