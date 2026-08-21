@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, Pencil, Trash2, ExternalLink, AlertCircle } from 'lucide-react'
+import { Plus, Pencil, Trash2, ExternalLink, AlertCircle, Download } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import {
   loadUsersIndex, saveUsersIndex, addUser, removeUser,
@@ -259,9 +259,10 @@ function ProfileDialog({ open, onOpenChange, email, profile, isAdmin, isAdminUse
             </div>
           </div>
 
-          {/* Admin section */}
+          {/* Admin section — only shown when there's something to display */}
+          {(isAdmin || isSelf) && (
           <div className="space-y-3 p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/30 rounded-lg">
-            {/* CPF — admin only */}
+            {/* CPF */}
             {(isAdmin || isSelf) && (
               <div className="space-y-1.5">
                 <Label className="text-xs text-amber-700 dark:text-amber-400">
@@ -270,20 +271,22 @@ function ProfileDialog({ open, onOpenChange, email, profile, isAdmin, isAdminUse
                 <Input value={cpf} onChange={e => setCpf(e.target.value)} placeholder="000.000.000-00" className="text-xs" />
               </div>
             )}
-            {/* Admin checkbox — visible to all; only admins can toggle (and not for self) */}
-            <label className={`flex items-center gap-2 w-fit ${!isSelf ? 'cursor-pointer' : 'cursor-default'}`}>
-              <input
-                type="checkbox"
-                checked={isAdminUser}
-                onChange={e => { if (!isSelf) onToggleAdmin(e.target.checked) }}
-                disabled={isSelf}
-                className="w-3.5 h-3.5 accent-amber-500"
-              />
-              <span className={`text-xs text-amber-700 dark:text-amber-400 ${isSelf ? 'opacity-70' : ''}`}>
-                Administrador do grupo
-              </span>
-            </label>
+            {/* Admin checkbox — only admins can see and toggle (not for self) */}
+            {isAdmin && !isSelf && (
+              <label className="flex items-center gap-2 w-fit cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isAdminUser}
+                  onChange={e => onToggleAdmin(e.target.checked)}
+                  className="w-3.5 h-3.5 accent-amber-500"
+                />
+                <span className="text-xs text-amber-700 dark:text-amber-400">
+                  Administrador do grupo
+                </span>
+              </label>
+            )}
           </div>
+          )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
@@ -317,7 +320,22 @@ function ProfileCard({
       <div className="relative px-5 pt-5 pb-4">
         <div className="flex items-start gap-4">
           {profile?.imagemBase64 ? (
-            <img src={profile.imagemBase64} className="w-14 h-14 rounded-full object-cover flex-shrink-0 border-2 border-amber-200" alt="" />
+            <div className="relative group/avatar flex-shrink-0">
+              <img src={profile.imagemBase64} className="w-14 h-14 rounded-full object-cover border-2 border-amber-200" alt="" />
+              <button
+                onClick={() => {
+                  const mime = profile.imagemBase64!.split(';')[0].split('/')[1] ?? 'jpeg'
+                  const a = document.createElement('a')
+                  a.href = profile.imagemBase64!
+                  a.download = `foto-${email}.${mime}`
+                  a.click()
+                }}
+                className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 opacity-0 group-hover/avatar:opacity-100 transition-opacity"
+                title="Baixar foto original"
+              >
+                <Download className="w-4 h-4 text-white" />
+              </button>
+            </div>
           ) : (
             <div className="w-14 h-14 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center flex-shrink-0 border-2 border-amber-200 dark:border-amber-800">
               <span className="text-lg font-bold text-amber-600 dark:text-amber-400">{emailInitials(email)}</span>
@@ -570,9 +588,10 @@ export function Usuarios() {
       />
 
 
-      {/* Edit dialog */}
+      {/* Edit dialog — key forces remount on email change so useState re-initializes */}
       {editEmail && (
         <ProfileDialog
+          key={editEmail}
           open={dialogOpen}
           onOpenChange={setDialogOpen}
           email={editEmail}
