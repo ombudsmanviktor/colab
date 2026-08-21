@@ -1282,33 +1282,14 @@ export function OrientacoesPage() {
                                 </div>
                               </TabsContent>
 
-                              {/* ── Tarefas (per-orientando) ── */}
+                              {/* ── Tarefas (VisaoGeral) ── */}
                               <TabsContent value="tarefas">
-                                <div className="space-y-2 mb-3">
-                                  {myTarefas.map(t => (
-                                    <div key={t.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">
-                                      <Checkbox checked={t.concluida} onCheckedChange={() => toggleTarefa(t)} />
-                                      <span className={`text-sm ${t.concluida ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-700 dark:text-gray-200'}`}>
-                                        {t.descricao}
-                                      </span>
-                                    </div>
-                                  ))}
-                                  {myTarefas.length === 0 && (
-                                    <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-2">Nenhuma tarefa cadastrada</p>
-                                  )}
-                                </div>
-                                <div className="flex gap-2" onClick={e => e.stopPropagation()}>
-                                  <Input
-                                    value={activeTarefaId === o.id ? newTarefa : ''}
-                                    onChange={e => { setActiveTarefaId(o.id); setNewTarefa(e.target.value) }}
-                                    onKeyDown={e => { if (e.key === 'Enter') addTarefa(o.id) }}
-                                    placeholder="Nova tarefa (Enter para adicionar)"
-                                    className="flex-1"
-                                  />
-                                  <Button size="sm" variant="outline" onClick={() => { setActiveTarefaId(o.id); addTarefa(o.id) }}>
-                                    <Plus className="w-4 h-4" />
-                                  </Button>
-                                </div>
+                                <TarefasView
+                                  userTasks={userTasks}
+                                  currentEmail={currentEmail}
+                                  onToggle={handleToggleGlobalTask}
+                                  onAdd={handleAddGlobalTask}
+                                />
                               </TabsContent>
 
                               {/* ── Projeto Original ── */}
