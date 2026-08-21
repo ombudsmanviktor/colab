@@ -298,6 +298,9 @@ export function OrientacoesPage() {
   const [showArchived, setShowArchived] = useState(false)
   const [pageTab, setPageTab] = useState<'orientandos' | 'tarefas'>('orientandos')
 
+  const [newTarefa, setNewTarefa] = useState('')
+  const [activeTarefaId, setActiveTarefaId] = useState<string | null>(null)
+
   const [activeReuniaoId, setActiveReuniaoId] = useState<string | null>(null)
   const [novaReuniaoData, setNovaReuniaoData] = useState('')
   const [novaReuniaoTexto, setNovaReuniaoTexto] = useState('')
@@ -584,6 +587,31 @@ export function OrientacoesPage() {
     } finally {
       setImporting(false)
     }
+  }
+
+  /* ── Tarefas (per-orientando) ── */
+
+  async function addTarefa(orientacaoId: string) {
+    if (!newTarefa.trim()) return
+    const t: TarefaOrientacao = {
+      id: crypto.randomUUID(),
+      orientacao_id: orientacaoId,
+      descricao: newTarefa,
+      concluida: false,
+      created_at: new Date().toISOString(),
+    }
+    const updatedTarefas = [...tarefas, t]
+    setTarefas(updatedTarefas)
+    setNewTarefa('')
+    const orientacao = orientacoes.find(o => o.id === orientacaoId)!
+    await saveOrientacaoFile(orientacao, updatedTarefas).catch(() => {})
+  }
+
+  async function toggleTarefa(t: TarefaOrientacao) {
+    const updatedTarefas = tarefas.map(x => x.id === t.id ? { ...x, concluida: !x.concluida } : x)
+    setTarefas(updatedTarefas)
+    const orientacao = orientacoes.find(o => o.id === t.orientacao_id)!
+    await saveOrientacaoFile(orientacao, updatedTarefas).catch(() => {})
   }
 
   /* ── Global tasks (VisaoGeral) ── */
@@ -1254,14 +1282,33 @@ export function OrientacoesPage() {
                                 </div>
                               </TabsContent>
 
-                              {/* ── Tarefas (VisaoGeral) ── */}
+                              {/* ── Tarefas (per-orientando) ── */}
                               <TabsContent value="tarefas">
-                                <TarefasView
-                                  userTasks={userTasks}
-                                  currentEmail={currentEmail}
-                                  onToggle={handleToggleGlobalTask}
-                                  onAdd={handleAddGlobalTask}
-                                />
+                                <div className="space-y-2 mb-3">
+                                  {myTarefas.map(t => (
+                                    <div key={t.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">
+                                      <Checkbox checked={t.concluida} onCheckedChange={() => toggleTarefa(t)} />
+                                      <span className={`text-sm ${t.concluida ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-700 dark:text-gray-200'}`}>
+                                        {t.descricao}
+                                      </span>
+                                    </div>
+                                  ))}
+                                  {myTarefas.length === 0 && (
+                                    <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-2">Nenhuma tarefa cadastrada</p>
+                                  )}
+                                </div>
+                                <div className="flex gap-2" onClick={e => e.stopPropagation()}>
+                                  <Input
+                                    value={activeTarefaId === o.id ? newTarefa : ''}
+                                    onChange={e => { setActiveTarefaId(o.id); setNewTarefa(e.target.value) }}
+                                    onKeyDown={e => { if (e.key === 'Enter') addTarefa(o.id) }}
+                                    placeholder="Nova tarefa (Enter para adicionar)"
+                                    className="flex-1"
+                                  />
+                                  <Button size="sm" variant="outline" onClick={() => { setActiveTarefaId(o.id); addTarefa(o.id) }}>
+                                    <Plus className="w-4 h-4" />
+                                  </Button>
+                                </div>
                               </TabsContent>
 
                               {/* ── Projeto Original ── */}
