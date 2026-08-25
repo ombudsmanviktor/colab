@@ -84,11 +84,34 @@ export async function listDirectory(cfg: GitHubConfig, dirPath: string, bypassCa
 }
 
 export async function readFile(cfg: GitHubConfig, filePath: string, bypassCache = false): Promise<GHFileContent> {
-  return ghFetch<GHFileContent>(
+  const file = await ghFetch<GHFileContent>(
     cfg,
     `/repos/${cfg.owner}/${cfg.repo}/contents/${filePath}?ref=${cfg.branch}`,
     bypassCache ? { bypassCache: true } : undefined
   )
+  // GitHub returns content:"" encoding:"none" for files > 1 MB.
+  // Fall back to the Blobs API (addressed by SHA, which is immutable)
+  // to retrieve the actual content.
+  if (file.encoding === 'none' && !file.content) {
+    const res = await fetch(
+      `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/git/blobs/${file.sha}`,
+      {
+        cache: bypassCache ? 'no-store' : undefined,
+        headers: {
+          Authorization: `Bearer ${cfg.token}`,
+          Accept: 'application/vnd.github.v3.raw',
+          ...(bypassCache ? { 'Cache-Control': 'no-cache' } : {}),
+        },
+      }
+    )
+    if (!res.ok) throw new Error(`GitHub blob fetch failed: HTTP ${res.status}`)
+    const text = await res.text()
+    // Re-encode as base64 so decodeContent() can handle it uniformly.
+    const bytes = new TextEncoder().encode(text)
+    const binStr = Array.from(bytes, b => String.fromCodePoint(b)).join('')
+    return { ...file, content: btoa(binStr), encoding: 'base64' }
+  }
+  return file
 }
 
 export async function writeTextFile(
