@@ -4,7 +4,7 @@ import { Plus, Pencil, Trash2, ExternalLink, AlertCircle, Download } from 'lucid
 import { useAuth } from '@/contexts/AuthContext'
 import {
   loadUsersIndex, saveUsersIndex, addUser, removeUser,
-  loadAllProfiles, saveUserProfile,
+  loadProfilesByEmails, saveUserProfile,
 } from '@/lib/storage'
 import { emailInitials, emailSlug } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -443,12 +443,13 @@ export function Usuarios() {
     queryFn: loadUsersIndex,
   })
 
-  const { data: profiles = [], isLoading: loadingProfiles } = useQuery<UserProfile[]>({
-    queryKey: ['all-profiles'],
-    queryFn: loadAllProfiles,
-  })
-
   const emails = index?.emails ?? []
+
+  const { data: profiles = [], isLoading: loadingProfiles } = useQuery<UserProfile[]>({
+    queryKey: ['all-profiles', emails],
+    queryFn: () => loadProfilesByEmails(emails),
+    enabled: !loadingIndex,
+  })
   const profileMap = new Map(profiles.map(p => [p.email, p]))
 
   // Sort: self first, then alphabetically by email

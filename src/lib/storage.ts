@@ -279,11 +279,20 @@ export async function saveUserTasks(ut: UserTasks): Promise<void> {
 
 // ─── User Profiles ────────────────────────────────────────────────────────
 
+// Load profiles directly by known email list — avoids directory listing whose
+// CDN-cached results may not include a newly created profile file.
+export async function loadProfilesByEmails(emails: string[]): Promise<UserProfile[]> {
+  if (isDemoMode()) return demoLoadAllProfiles().filter(p => emails.includes(p.email))
+  if (emails.length === 0) return []
+  const results = await Promise.all(
+    emails.map(email => readYaml<UserProfile>(`users/profiles/${emailSlug(email)}.yaml`, true))
+  )
+  return results.filter((x): x is UserProfile => x !== null)
+}
+
 export async function loadAllProfiles(): Promise<UserProfile[]> {
   if (isDemoMode()) return demoLoadAllProfiles()
   try {
-    // bypassCache=true: same CDN-staleness fix as loadUsersIndex — without it
-    // a page reload after saving a profile returns the pre-save version.
     const entries = await listDirectory(cfg(), 'users/profiles', true)
     const files = entries.filter(e => e.type === 'file' && e.name.endsWith('.yaml'))
     const results = await Promise.all(
