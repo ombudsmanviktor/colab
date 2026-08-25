@@ -527,7 +527,7 @@ export function Usuarios() {
   }
 
   function handleProfileSaved(profile: UserProfile) {
-    queryClient.setQueryData(['all-profiles'], (prev: UserProfile[] = []) => {
+    queryClient.setQueryData(['all-profiles', emails], (prev: UserProfile[] = []) => {
       const exists = prev.some(p => p.email === profile.email)
       return exists ? prev.map(p => p.email === profile.email ? profile : p) : [...prev, profile]
     })
