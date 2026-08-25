@@ -250,10 +250,10 @@ export async function removeUser(email: string): Promise<void> {
 export async function loadAllUserTasks(): Promise<UserTasks[]> {
   if (isDemoMode()) return demoLoadAllUserTasks()
   try {
-    const entries = await listDirectory(cfg(), 'tasks')
+    const entries = await listDirectory(cfg(), 'tasks', true)
     const files = entries.filter(e => e.type === 'file' && e.name.endsWith('.yaml'))
     const results = await Promise.all(
-      files.map(f => readYaml<UserTasks>(`tasks/${f.name}`))
+      files.map(f => readYaml<UserTasks>(`tasks/${f.name}`, true))
     )
     return results.filter((x): x is UserTasks => x !== null)
   } catch {
@@ -267,7 +267,7 @@ export async function loadUserTasks(email: string): Promise<UserTasks> {
     return all.find(x => x.email === email) ?? { email, tasks: [], lastAccess: new Date().toISOString() }
   }
   const path = `tasks/${emailSlug(email)}.yaml`
-  const data = await readYaml<UserTasks>(path)
+  const data = await readYaml<UserTasks>(path, true)
   return data ?? { email, tasks: [], lastAccess: new Date().toISOString() }
 }
 
@@ -282,10 +282,12 @@ export async function saveUserTasks(ut: UserTasks): Promise<void> {
 export async function loadAllProfiles(): Promise<UserProfile[]> {
   if (isDemoMode()) return demoLoadAllProfiles()
   try {
-    const entries = await listDirectory(cfg(), 'users/profiles')
+    // bypassCache=true: same CDN-staleness fix as loadUsersIndex — without it
+    // a page reload after saving a profile returns the pre-save version.
+    const entries = await listDirectory(cfg(), 'users/profiles', true)
     const files = entries.filter(e => e.type === 'file' && e.name.endsWith('.yaml'))
     const results = await Promise.all(
-      files.map(f => readYaml<UserProfile>(`users/profiles/${f.name}`))
+      files.map(f => readYaml<UserProfile>(`users/profiles/${f.name}`, true))
     )
     return results.filter((x): x is UserProfile => x !== null)
   } catch {
@@ -296,7 +298,7 @@ export async function loadAllProfiles(): Promise<UserProfile[]> {
 export async function loadUserProfile(email: string): Promise<UserProfile | null> {
   if (isDemoMode()) return demoLoadUserProfile(email)
   const path = `users/profiles/${emailSlug(email)}.yaml`
-  return readYaml<UserProfile>(path)
+  return readYaml<UserProfile>(path, true)
 }
 
 export async function saveUserProfile(profile: UserProfile): Promise<void> {
@@ -310,10 +312,10 @@ export async function saveUserProfile(profile: UserProfile): Promise<void> {
 export async function loadOrdemDoDias(): Promise<OrdemDoDia[]> {
   if (isDemoMode()) return demoLoadOrdens()
   try {
-    const entries = await listDirectory(cfg(), 'agenda')
+    const entries = await listDirectory(cfg(), 'agenda', true)
     const files = entries.filter(e => e.type === 'file' && e.name.endsWith('.yaml'))
     const results = await Promise.all(
-      files.map(f => readYaml<OrdemDoDia>(`agenda/${f.name}`))
+      files.map(f => readYaml<OrdemDoDia>(`agenda/${f.name}`, true))
     )
     return results
       .filter((x): x is OrdemDoDia => x !== null)
@@ -338,10 +340,10 @@ export async function deleteOrdemDoDia(id: string): Promise<void> {
 export async function loadAtas(): Promise<AtaDecisao[]> {
   if (isDemoMode()) return demoLoadAtas()
   try {
-    const entries = await listDirectory(cfg(), 'atas')
+    const entries = await listDirectory(cfg(), 'atas', true)
     const files = entries.filter(e => e.type === 'file' && e.name.endsWith('.yaml'))
     const results = await Promise.all(
-      files.map(f => readYaml<AtaDecisao>(`atas/${f.name}`))
+      files.map(f => readYaml<AtaDecisao>(`atas/${f.name}`, true))
     )
     return results
       .filter((x): x is AtaDecisao => x !== null)
@@ -366,10 +368,10 @@ export async function deleteAta(id: string): Promise<void> {
 export async function loadLeituras(): Promise<Leitura[]> {
   if (isDemoMode()) return demoLoadLeituras()
   try {
-    const entries = await listDirectory(cfg(), 'leituras')
+    const entries = await listDirectory(cfg(), 'leituras', true)
     const files = entries.filter(e => e.type === 'file' && e.name.endsWith('.yaml'))
     const results = await Promise.all(
-      files.map(f => readYaml<Leitura>(`leituras/${f.name}`))
+      files.map(f => readYaml<Leitura>(`leituras/${f.name}`, true))
     )
     return results
       .filter((x): x is Leitura => x !== null)
@@ -396,10 +398,10 @@ export { generateId }
 export async function loadProducoes(): Promise<Producao[]> {
   if (isDemoMode()) return demoLoadProducoes()
   try {
-    const entries = await listDirectory(cfg(), 'producoes')
+    const entries = await listDirectory(cfg(), 'producoes', true)
     const files = entries.filter(e => e.type === 'file' && e.name.endsWith('.yaml'))
     const results = await Promise.all(
-      files.map(f => readYaml<Producao>(`producoes/${f.name}`))
+      files.map(f => readYaml<Producao>(`producoes/${f.name}`, true))
     )
     return results
       .filter((x): x is Producao => x !== null)
@@ -424,10 +426,10 @@ export async function deleteProducao(id: string): Promise<void> {
 export async function loadSugestoes(): Promise<SugestaoMessage[]> {
   if (isDemoMode()) return demoLoadSugestoes()
   try {
-    const entries = await listDirectory(cfg(), 'sugestoes')
+    const entries = await listDirectory(cfg(), 'sugestoes', true)
     const files = entries.filter(e => e.type === 'file' && e.name.endsWith('.yaml'))
     const results = await Promise.all(
-      files.map(f => readYaml<SugestaoMessage>(`sugestoes/${f.name}`))
+      files.map(f => readYaml<SugestaoMessage>(`sugestoes/${f.name}`, true))
     )
     return results
       .filter((x): x is SugestaoMessage => x !== null)
@@ -466,9 +468,9 @@ function anexoToStored(a: Anexo): StoredAnexo {
 export async function loadOrientacoes(): Promise<Orientacao[]> {
   if (isDemoMode()) return demoLoadOrientacoes()
   try {
-    const entries = await listDirectory(cfg(), 'orientacoes')
+    const entries = await listDirectory(cfg(), 'orientacoes', true)
     const files = entries.filter(e => e.type === 'file' && e.name.endsWith('.yaml'))
-    const docs = await Promise.all(files.map(f => readYaml<StoredOrientacao>(`orientacoes/${f.name}`)))
+    const docs = await Promise.all(files.map(f => readYaml<StoredOrientacao>(`orientacoes/${f.name}`, true)))
     const orientacoes: Orientacao[] = []
     for (const doc of docs) {
       if (!doc) continue
@@ -523,7 +525,7 @@ const EMPTY_TIMELINE: TimelineData = { events: [], categories: [] }
 
 export async function loadTimeline(): Promise<TimelineData> {
   if (isDemoMode()) return demoLoadTimeline()
-  const data = await readYaml<TimelineData>(TIMELINE_PATH)
+  const data = await readYaml<TimelineData>(TIMELINE_PATH, true)
   return data ?? EMPTY_TIMELINE
 }
 
@@ -539,7 +541,7 @@ const EMPTY_CALLOUT: CalloutData = { content: '', updated_at: '', updated_by: ''
 
 export async function loadCallout(): Promise<CalloutData> {
   if (isDemoMode()) return demoLoadCallout()
-  const data = await readYaml<CalloutData>(CALLOUT_PATH)
+  const data = await readYaml<CalloutData>(CALLOUT_PATH, true)
   return data ?? EMPTY_CALLOUT
 }
 
@@ -616,11 +618,11 @@ function serializeWikiMd(entry: WikiEntry): string {
 export async function loadWikiEntries(): Promise<WikiEntry[]> {
   if (isDemoMode()) return demoLoadWikiEntries()
   try {
-    const entries = await listDirectory(cfg(), WIKI_DIR)
+    const entries = await listDirectory(cfg(), WIKI_DIR, true)
     const files = entries.filter(e => e.type === 'file' && e.name.endsWith('.md'))
     const results = await Promise.all(
       files.map(async f => {
-        const file = await readFile(cfg(), `${WIKI_DIR}/${f.name}`)
+        const file = await readFile(cfg(), `${WIKI_DIR}/${f.name}`, true)
         shaCache.set(`${WIKI_DIR}/${f.name}`, file.sha)
         return parseWikiMd(decodeContent(file.content), f.name.replace('.md', ''))
       })
