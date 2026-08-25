@@ -470,7 +470,7 @@ export function Usuarios() {
       : prev
     )
     // Also remove from profiles cache immediately
-    queryClient.setQueryData(['all-profiles'], (prev: UserProfile[] | undefined) =>
+    queryClient.setQueryData(['all-profiles', emails], (prev: UserProfile[] | undefined) =>
       prev ? prev.filter(p => p.email !== email) : prev
     )
     try {
@@ -479,7 +479,7 @@ export function Usuarios() {
     } catch (err) {
       // Rollback on failure
       queryClient.invalidateQueries({ queryKey: ['users-index'] })
-      queryClient.invalidateQueries({ queryKey: ['all-profiles'] })
+      queryClient.invalidateQueries({ queryKey: ['all-profiles', emails] })
       toast({ title: 'Erro', description: String(err), variant: 'destructive' })
     }
   }

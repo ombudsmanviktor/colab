@@ -32,14 +32,19 @@ export function isGitHubConfigured(): boolean {
   return getGitHubConfig() !== null
 }
 
-async function ghFetch<T>(cfg: GitHubConfig, path: string, options?: RequestInit): Promise<T> {
+async function ghFetch<T>(cfg: GitHubConfig, path: string, options?: RequestInit & { bypassCache?: boolean }): Promise<T> {
+  const { bypassCache, ...restOptions } = options ?? {}
   const res = await fetch(`https://api.github.com${path}`, {
-    ...options,
+    ...restOptions,
+    // 'no-store' tells the browser and any intermediate cache (CDN) not to
+    // serve a cached response and not to store the new response in cache.
+    cache: bypassCache ? 'no-store' : undefined,
     headers: {
       Authorization: `Bearer ${cfg.token}`,
       Accept: 'application/vnd.github.v3+json',
       'Content-Type': 'application/json',
-      ...(options?.headers ?? {}),
+      ...(bypassCache ? { 'Cache-Control': 'no-cache' } : {}),
+      ...(restOptions.headers ?? {}),
     },
   })
   if (!res.ok) {
@@ -65,11 +70,11 @@ export interface GHDirEntry {
 }
 
 export async function listDirectory(cfg: GitHubConfig, dirPath: string, bypassCache = false): Promise<GHDirEntry[]> {
-  const cb = bypassCache ? `&_ts=${Date.now()}` : ''
   try {
     return await ghFetch<GHDirEntry[]>(
       cfg,
-      `/repos/${cfg.owner}/${cfg.repo}/contents/${dirPath}?ref=${cfg.branch}${cb}`
+      `/repos/${cfg.owner}/${cfg.repo}/contents/${dirPath}?ref=${cfg.branch}`,
+      bypassCache ? { bypassCache: true } : undefined
     )
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
@@ -79,13 +84,10 @@ export async function listDirectory(cfg: GitHubConfig, dirPath: string, bypassCa
 }
 
 export async function readFile(cfg: GitHubConfig, filePath: string, bypassCache = false): Promise<GHFileContent> {
-  // bypassCache appends a timestamp so GitHub's CDN treats it as a unique
-  // URL and always fetches from origin — critical before a write to get
-  // the current SHA rather than a cached (stale) one.
-  const cb = bypassCache ? `&_ts=${Date.now()}` : ''
   return ghFetch<GHFileContent>(
     cfg,
-    `/repos/${cfg.owner}/${cfg.repo}/contents/${filePath}?ref=${cfg.branch}${cb}`
+    `/repos/${cfg.owner}/${cfg.repo}/contents/${filePath}?ref=${cfg.branch}`,
+    bypassCache ? { bypassCache: true } : undefined
   )
 }
 

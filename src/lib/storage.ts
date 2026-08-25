@@ -62,7 +62,9 @@ async function readYaml<T>(path: string, bypassCache = false): Promise<T | null>
     }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
-    if (msg.includes('Not Found') || msg.includes('404')) return null
+    if (!msg.includes('Not Found') && !msg.includes('404')) {
+      console.error(`[storage] readYaml(${path}) failed:`, err)
+    }
     return null
   }
 }
