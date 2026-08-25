@@ -52,9 +52,10 @@ async function readYaml<T>(path: string, bypassCache = false): Promise<T | null>
     const file = await readFile(cfg(), path, bypassCache)
     shaCache.set(path, file.sha)
     try {
-      // GitHub returns content:"" encoding:"none" for files > 1 MB.
-      // yaml.load("") returns undefined, which must be treated as missing.
-      const parsed = yaml.load(decodeContent(file.content))
+      // 'raw-text' encoding is set by readFile() for files > 1 MB that were
+      // fetched via the Blobs API — content is already plain text, skip decode.
+      const text = file.encoding === 'raw-text' ? file.content : decodeContent(file.content)
+      const parsed = yaml.load(text)
       if (parsed == null || typeof parsed !== 'object') return null
       return parsed as T
     } catch {
@@ -138,7 +139,8 @@ async function _doMerge<T>(
     try {
       const file = await readFile(cfg(), path, true)
       shaCache.set(path, file.sha)
-      current = (yaml.load(decodeContent(file.content)) as T) ?? empty
+      const text = file.encoding === 'raw-text' ? file.content : decodeContent(file.content)
+      current = (yaml.load(text) as T) ?? empty
     } catch {
       shaCache.delete(path)
     }

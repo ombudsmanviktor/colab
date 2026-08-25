@@ -91,7 +91,7 @@ export async function readFile(cfg: GitHubConfig, filePath: string, bypassCache 
   )
   // GitHub returns content:"" encoding:"none" for files > 1 MB.
   // Fall back to the Blobs API (addressed by SHA, which is immutable)
-  // to retrieve the actual content.
+  // to retrieve the actual content as plain text.
   if (file.encoding === 'none' && !file.content) {
     const res = await fetch(
       `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/git/blobs/${file.sha}`,
@@ -105,11 +105,8 @@ export async function readFile(cfg: GitHubConfig, filePath: string, bypassCache 
       }
     )
     if (!res.ok) throw new Error(`GitHub blob fetch failed: HTTP ${res.status}`)
-    const text = await res.text()
-    // Re-encode as base64 so decodeContent() can handle it uniformly.
-    const bytes = new TextEncoder().encode(text)
-    const binStr = Array.from(bytes, b => String.fromCodePoint(b)).join('')
-    return { ...file, content: btoa(binStr), encoding: 'base64' }
+    // Use a custom encoding marker so consumers can skip the base64 decode step.
+    return { ...file, content: await res.text(), encoding: 'raw-text' }
   }
   return file
 }
