@@ -32,19 +32,14 @@ export function isGitHubConfigured(): boolean {
   return getGitHubConfig() !== null
 }
 
-async function ghFetch<T>(cfg: GitHubConfig, path: string, options?: RequestInit & { bypassCache?: boolean }): Promise<T> {
-  const { bypassCache, ...restOptions } = options ?? {}
+async function ghFetch<T>(cfg: GitHubConfig, path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`https://api.github.com${path}`, {
-    ...restOptions,
-    // 'no-store' tells the browser and any intermediate cache (CDN) not to
-    // serve a cached response and not to store the new response in cache.
-    cache: bypassCache ? 'no-store' : undefined,
+    ...options,
     headers: {
       Authorization: `Bearer ${cfg.token}`,
       Accept: 'application/vnd.github.v3+json',
       'Content-Type': 'application/json',
-      ...(bypassCache ? { 'Cache-Control': 'no-cache' } : {}),
-      ...(restOptions.headers ?? {}),
+      ...(options?.headers ?? {}),
     },
   })
   if (!res.ok) {
@@ -70,11 +65,11 @@ export interface GHDirEntry {
 }
 
 export async function listDirectory(cfg: GitHubConfig, dirPath: string, bypassCache = false): Promise<GHDirEntry[]> {
+  const cb = bypassCache ? `&_ts=${Date.now()}` : ''
   try {
     return await ghFetch<GHDirEntry[]>(
       cfg,
-      `/repos/${cfg.owner}/${cfg.repo}/contents/${dirPath}?ref=${cfg.branch}`,
-      bypassCache ? { bypassCache: true } : undefined
+      `/repos/${cfg.owner}/${cfg.repo}/contents/${dirPath}?ref=${cfg.branch}${cb}`
     )
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
@@ -84,10 +79,10 @@ export async function listDirectory(cfg: GitHubConfig, dirPath: string, bypassCa
 }
 
 export async function readFile(cfg: GitHubConfig, filePath: string, bypassCache = false): Promise<GHFileContent> {
+  const cb = bypassCache ? `&_ts=${Date.now()}` : ''
   const file = await ghFetch<GHFileContent>(
     cfg,
-    `/repos/${cfg.owner}/${cfg.repo}/contents/${filePath}?ref=${cfg.branch}`,
-    bypassCache ? { bypassCache: true } : undefined
+    `/repos/${cfg.owner}/${cfg.repo}/contents/${filePath}?ref=${cfg.branch}${cb}`
   )
   // GitHub returns content:"" encoding:"none" for files > 1 MB.
   // Fall back to the Blobs API (addressed by SHA, which is immutable)
@@ -96,11 +91,9 @@ export async function readFile(cfg: GitHubConfig, filePath: string, bypassCache 
     const res = await fetch(
       `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/git/blobs/${file.sha}`,
       {
-        cache: bypassCache ? 'no-store' : undefined,
         headers: {
           Authorization: `Bearer ${cfg.token}`,
           Accept: 'application/vnd.github.v3.raw',
-          ...(bypassCache ? { 'Cache-Control': 'no-cache' } : {}),
         },
       }
     )
