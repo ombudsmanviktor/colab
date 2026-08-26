@@ -18,7 +18,9 @@ import type { UserProfile, UserStatus, UsersIndex } from '@/types'
 
 const STATUS_OPTIONS: { value: UserStatus; label: string; color: string }[] = [
   { value: 'graduando', label: 'Graduando', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
+  { value: 'graduado', label: 'Graduado', color: 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400' },
   { value: 'mestrando', label: 'Mestrando', color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' },
+  { value: 'mestre', label: 'Mestre', color: 'bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-900/30 dark:text-fuchsia-400' },
   { value: 'doutorando', label: 'Doutorando', color: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400' },
   { value: 'doutor', label: 'Doutor', color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },
   { value: 'pos-doutorando', label: 'Pós-doutorando', color: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400' },
@@ -300,7 +302,7 @@ function ProfileDialog({ open, onOpenChange, email, profile, isAdmin, isAdminUse
 }
 
 function ProfileCard({
-  email, profile, isAdmin, isAdminUser, canEdit, isSelf,
+  email, profile, isAdmin, isAdminUser, canEdit, isSelf, canSeeCpf,
   onEdit, onRemove,
 }: {
   email: string
@@ -309,6 +311,7 @@ function ProfileCard({
   isAdminUser: boolean
   canEdit: boolean
   isSelf: boolean
+  canSeeCpf: boolean
   onEdit: () => void
   onRemove: () => void
 }) {
@@ -406,8 +409,8 @@ function ProfileCard({
             )}
           </div>
 
-          {/* CPF — only in DOM for the card's own user or admins */}
-          {(isAdmin || isSelf) && profile?.cpf && (
+          {/* CPF — visible only to the user themselves or to líderes */}
+          {canSeeCpf && profile?.cpf && (
             <div className="text-xs text-gray-400 dark:text-gray-500">
               CPF: <span className="font-mono">{profile.cpf}</span>
             </div>
@@ -461,6 +464,8 @@ export function Usuarios() {
   const admins = index?.admins ?? []
   // Derive admin status from live query data (not stale session flag)
   const isAdmin = admins.includes(myEmail)
+  const myProfile = profileMap.get(myEmail)
+  const isLider = myProfile?.status === 'lider'
 
   async function handleRemoveUser(email: string) {
     if (!confirm(`Remover ${email} do grupo?`)) return
@@ -573,6 +578,7 @@ export function Usuarios() {
               isAdminUser={admins.includes(email)}
               canEdit={isAdmin || email === myEmail}
               isSelf={email === myEmail}
+              canSeeCpf={isLider || email === myEmail}
               onEdit={() => openEdit(email)}
               onRemove={() => handleRemoveUser(email)}
             />

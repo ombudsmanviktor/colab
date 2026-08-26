@@ -29,7 +29,9 @@ export interface UserTasks {
 
 export type UserStatus =
   | 'graduando'
+  | 'graduado'
   | 'mestrando'
+  | 'mestre'
   | 'doutorando'
   | 'doutor'
   | 'pos-doutorando'
