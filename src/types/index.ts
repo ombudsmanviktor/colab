@@ -41,6 +41,7 @@ export interface UserProfile {
   email: string
   nome: string
   status?: UserStatus
+  dataIngresso?: string
   imagemBase64?: string
   minibio?: string
   lattes?: string

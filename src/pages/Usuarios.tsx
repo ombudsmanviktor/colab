@@ -34,6 +34,45 @@ function statusLabel(status?: UserStatus) {
   return STATUS_OPTIONS.find(o => o.value === status)?.label ?? ''
 }
 
+function addMonths(date: Date, n: number): Date {
+  const d = new Date(date)
+  d.setMonth(d.getMonth() + n)
+  return d
+}
+function monthsElapsed(from: Date): number {
+  const now = new Date()
+  return (now.getFullYear() - from.getFullYear()) * 12 + (now.getMonth() - from.getMonth())
+}
+function fmtDate(d: Date): string {
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
+type PillColor = 'green' | 'yellow' | 'red'
+const PILL_CLASSES: Record<PillColor, string> = {
+  green:  'bg-green-100  text-green-700  dark:bg-green-900/30  dark:text-green-400',
+  yellow: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
+  red:    'bg-red-100    text-red-700    dark:bg-red-900/30    dark:text-red-400',
+}
+
+function calcPrazos(status: 'mestrando' | 'doutorando', dataIngresso: string) {
+  const ingresso = new Date(dataIngresso + 'T00:00:00')
+  const elapsed = monthsElapsed(ingresso)
+  if (status === 'mestrando') {
+    return {
+      qualDate: addMonths(ingresso, 18),
+      defDate:  addMonths(ingresso, 24),
+      qualColor: (elapsed < 12 ? 'green' : elapsed < 18 ? 'yellow' : 'red') as PillColor,
+      defColor:  (elapsed < 24 ? 'green' : 'red') as PillColor,
+    }
+  }
+  return {
+    qualDate: addMonths(ingresso, 36),
+    defDate:  addMonths(ingresso, 48),
+    qualColor: (elapsed < 24 ? 'green' : elapsed < 36 ? 'yellow' : 'red') as PillColor,
+    defColor:  (elapsed < 48 ? 'green' : 'red') as PillColor,
+  }
+}
+
 function LinkRow({ href, label }: { href: string; label: string }) {
   if (!href) return null
   return (
@@ -122,6 +161,7 @@ function ProfileDialog({ open, onOpenChange, email, profile, isAdmin, isAdminUse
   const [x, setX] = useState(profile?.x ?? '')
   const [telefone, setTelefone] = useState(profile?.telefone ?? '')
   const [cpf, setCpf] = useState(profile?.cpf ?? '')
+  const [dataIngresso, setDataIngresso] = useState(profile?.dataIngresso ?? '')
   const [imagemBase64, setImagemBase64] = useState(profile?.imagemBase64 ?? '')
   const [saving, setSaving] = useState(false)
   const { toast } = useToast()
@@ -152,6 +192,7 @@ function ProfileDialog({ open, onOpenChange, email, profile, isAdmin, isAdminUse
         instagram: instagram.trim() || undefined,
         x: x.trim() || undefined,
         telefone: telefone.trim() || undefined,
+        dataIngresso: (status === 'mestrando' || status === 'doutorando') ? (dataIngresso || undefined) : undefined,
         ...((isAdmin || isSelf) ? { cpf: cpf.trim() || undefined } : {}),
         imagemBase64: imagemBase64 || undefined,
         updatedAt: now,
@@ -216,6 +257,18 @@ function ProfileDialog({ open, onOpenChange, email, profile, isAdmin, isAdminUse
               </select>
             </div>
           </div>
+
+          {(status === 'mestrando' || status === 'doutorando') && (
+            <div className="space-y-1.5">
+              <Label>Data de ingresso no programa</Label>
+              <Input
+                type="date"
+                value={dataIngresso}
+                onChange={e => setDataIngresso(e.target.value)}
+                className="text-sm"
+              />
+            </div>
+          )}
 
           <div className="space-y-1.5">
             <Label>Minibio <span className="text-gray-400 font-normal">({minibio.length}/280)</span></Label>
@@ -408,6 +461,21 @@ function ProfileCard({
               <span className="text-xs text-gray-500 dark:text-gray-400">{profile.telefone}</span>
             )}
           </div>
+
+          {/* Deadline pills for mestrandos and doutorandos */}
+          {(profile?.status === 'mestrando' || profile?.status === 'doutorando') && profile?.dataIngresso && (() => {
+            const { qualDate, defDate, qualColor, defColor } = calcPrazos(profile.status as 'mestrando' | 'doutorando', profile.dataIngresso!)
+            return (
+              <div className="flex flex-wrap gap-2 pt-1">
+                <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${PILL_CLASSES[qualColor]}`}>
+                  Qualificação: {fmtDate(qualDate)}
+                </span>
+                <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${PILL_CLASSES[defColor]}`}>
+                  Defesa: {fmtDate(defDate)}
+                </span>
+              </div>
+            )
+          })()}
 
           {/* CPF — visible only to the user themselves or to líderes */}
           {canSeeCpf && profile?.cpf && (
