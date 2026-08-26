@@ -17,13 +17,13 @@ import { ToastContainer } from '@/components/ui/toast'
 import type { UserProfile, UserStatus, UsersIndex } from '@/types'
 
 const STATUS_OPTIONS: { value: UserStatus; label: string; color: string }[] = [
-  { value: 'graduando', label: 'Graduando', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
-  { value: 'graduado', label: 'Graduado', color: 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400' },
-  { value: 'mestrando', label: 'Mestrando', color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' },
-  { value: 'mestre', label: 'Mestre', color: 'bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-900/30 dark:text-fuchsia-400' },
-  { value: 'doutorando', label: 'Doutorando', color: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400' },
-  { value: 'doutor', label: 'Doutor', color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },
-  { value: 'pos-doutorando', label: 'Pós-doutorando', color: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400' },
+  { value: 'graduando', label: 'Graduando(a)', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
+  { value: 'graduado', label: 'Graduado(a)', color: 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400' },
+  { value: 'mestrando', label: 'Mestrando(a)', color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' },
+  { value: 'mestre', label: 'Mestre(a)', color: 'bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-900/30 dark:text-fuchsia-400' },
+  { value: 'doutorando', label: 'Doutorando(a)', color: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400' },
+  { value: 'doutor', label: 'Doutor(a)', color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },
+  { value: 'pos-doutorando', label: 'Pós-Doutorando(a)', color: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400' },
   { value: 'lider', label: 'Líder do Grupo', color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' },
 ]
 
