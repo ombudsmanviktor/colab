@@ -185,6 +185,8 @@ export interface WikiEntry {
   id: string
   title: string
   content: string
+  category?: string
+  description?: string
   created_at: string
   updated_at: string
   created_by: string

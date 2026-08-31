@@ -19,6 +19,31 @@ import { useToast } from '@/hooks/useToast'
 import { ToastContainer } from '@/components/ui/toast'
 import type { WikiEntry } from '@/types'
 
+// ─── Categories ───────────────────────────────────────────────────────────
+
+export const WIKI_CATEGORIES = [
+  'O Básico da Vida Acadêmica',
+  'Facilitando a Pesquisa',
+  'DIY: Para você se virar sozinho(a)',
+  'Nossa Comunicação Interna',
+] as const
+
+function groupByCategory(entries: WikiEntry[]): Array<{ category: string | null; items: WikiEntry[] }> {
+  const known = WIKI_CATEGORIES as readonly string[]
+  const map = new Map<string | null, WikiEntry[]>()
+  for (const e of entries) {
+    const cat = (e.category && known.includes(e.category)) ? e.category : null
+    if (!map.has(cat)) map.set(cat, [])
+    map.get(cat)!.push(e)
+  }
+  const result: Array<{ category: string | null; items: WikiEntry[] }> = []
+  for (const cat of known) {
+    if (map.has(cat)) result.push({ category: cat, items: map.get(cat)! })
+  }
+  if (map.has(null) && map.get(null)!.length > 0) result.push({ category: null, items: map.get(null)! })
+  return result
+}
+
 // ─── Format helpers ───────────────────────────────────────────────────────
 
 function fmt(
@@ -326,6 +351,8 @@ function WikiEditor({ entry, onSave, onCancel, isNew }: {
   isNew: boolean
 }) {
   const [title, setTitle] = useState(entry.title === 'Nova entrada' && isNew ? '' : entry.title)
+  const [category, setCategory] = useState(entry.category ?? '')
+  const [description, setDescription] = useState(entry.description ?? '')
   const [content, setContent] = useState(entry.content)
   const [saving, setSaving] = useState(false)
   const [showLink, setShowLink] = useState(false)
@@ -388,7 +415,13 @@ function WikiEditor({ entry, onSave, onCancel, isNew }: {
   async function handleSave() {
     if (!title.trim()) return
     setSaving(true)
-    await onSave({ ...entry, title: title.trim(), content: content.trim() })
+    await onSave({
+      ...entry,
+      title: title.trim(),
+      content: content.trim(),
+      category: category || undefined,
+      description: description.trim() || undefined,
+    })
     setSaving(false)
   }
 
@@ -403,8 +436,8 @@ function WikiEditor({ entry, onSave, onCancel, isNew }: {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Title */}
-      <div className="px-6 pt-5 pb-3 border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
+      {/* Title + metadata */}
+      <div className="px-6 pt-5 pb-3 border-b border-gray-100 dark:border-gray-800 flex-shrink-0 space-y-2">
         <input
           ref={titleRef}
           value={title}
@@ -412,6 +445,22 @@ function WikiEditor({ entry, onSave, onCancel, isNew }: {
           placeholder="Título da entrada…"
           className="w-full text-2xl font-bold text-gray-900 dark:text-white bg-transparent outline-none placeholder:text-gray-300 dark:placeholder:text-gray-600"
         />
+        <div className="flex flex-wrap gap-3">
+          <select
+            value={category}
+            onChange={e => setCategory(e.target.value)}
+            className="text-xs px-2 py-1 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 outline-none focus:border-amber-400"
+          >
+            <option value="">Sem categoria</option>
+            {WIKI_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <input
+            value={description}
+            onChange={e => setDescription(e.target.value)}
+            placeholder="Descrição breve (aparece no índice)…"
+            className="flex-1 min-w-48 text-xs px-2 py-1 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 outline-none focus:border-amber-400 placeholder:text-gray-300 dark:placeholder:text-gray-600"
+          />
+        </div>
       </div>
 
       {/* Mobile: Edit/Preview tabs */}
@@ -741,11 +790,52 @@ const HEADING_INDENT: Record<number, string> = {
   3: 'pl-16',
 }
 
+function WikiTocEntry({ entry, idx, onSelectEntry }: { entry: WikiEntry; idx: number; onSelectEntry: (id: string) => void }) {
+  const headings = extractHeadings(entry.content)
+  return (
+    <li>
+      <button
+        onClick={() => onSelectEntry(entry.id)}
+        className="flex items-baseline gap-3 text-left w-full py-1.5 px-2 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-950/30 group transition-colors"
+      >
+        <span className="text-xs text-gray-400 dark:text-gray-600 w-5 text-right flex-shrink-0 tabular-nums">
+          {idx + 1}.
+        </span>
+        <span className="flex-1 min-w-0">
+          <span className="text-sm font-semibold text-amber-700 dark:text-amber-400 group-hover:underline">
+            {entry.title}
+          </span>
+          {entry.description && (
+            <span className="block text-xs text-gray-400 dark:text-gray-500 mt-0.5 truncate">{entry.description}</span>
+          )}
+        </span>
+      </button>
+      {headings.length > 0 && (
+        <ul className="mt-0.5 space-y-0.5">
+          {headings.map((h, j) => (
+            <li key={j}>
+              <button
+                onClick={() => onSelectEntry(entry.id)}
+                className={`flex items-center text-left w-full py-0.5 px-2 rounded text-xs text-gray-500 dark:text-gray-400 hover:text-amber-600 dark:hover:text-amber-400 transition-colors ${HEADING_INDENT[h.level] ?? 'pl-9'}`}
+              >
+                <span className="truncate">{h.text}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </li>
+  )
+}
+
 function WikiToc({ entries, onSelectEntry, onNew }: {
   entries: WikiEntry[]
   onSelectEntry: (id: string) => void
   onNew: () => void
 }) {
+  const groups = groupByCategory(entries)
+  const hasCategories = groups.some(g => g.category !== null)
+
   return (
     <div className="flex-1 overflow-y-auto px-8 py-8">
       <div className="max-w-2xl">
@@ -761,40 +851,32 @@ function WikiToc({ entries, onSelectEntry, onNew }: {
               <FilePlus className="w-4 h-4" /> Nova entrada
             </Button>
           </div>
-        ) : (
-          <ol className="space-y-3">
-            {entries.map((entry, i) => {
-              const headings = extractHeadings(entry.content)
+        ) : hasCategories ? (
+          <div className="space-y-8">
+            {groups.map(({ category, items }) => {
+              let globalIdx = entries.findIndex(e => e.id === items[0]?.id)
               return (
-                <li key={entry.id}>
-                  <button
-                    onClick={() => onSelectEntry(entry.id)}
-                    className="flex items-baseline gap-3 text-left w-full py-1.5 px-2 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-950/30 group transition-colors"
-                  >
-                    <span className="text-xs text-gray-400 dark:text-gray-600 w-5 text-right flex-shrink-0 tabular-nums">
-                      {i + 1}.
-                    </span>
-                    <span className="text-sm font-semibold text-amber-700 dark:text-amber-400 group-hover:underline">
-                      {entry.title}
-                    </span>
-                  </button>
-                  {headings.length > 0 && (
-                    <ul className="mt-0.5 space-y-0.5">
-                      {headings.map((h, j) => (
-                        <li key={j}>
-                          <button
-                            onClick={() => onSelectEntry(entry.id)}
-                            className={`flex items-center text-left w-full py-0.5 px-2 rounded text-xs text-gray-500 dark:text-gray-400 hover:text-amber-600 dark:hover:text-amber-400 transition-colors ${HEADING_INDENT[h.level] ?? 'pl-9'}`}
-                          >
-                            <span className="truncate">{h.text}</span>
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
+                <section key={category ?? '__none__'}>
+                  {category && (
+                    <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-3 pb-1 border-b border-gray-100 dark:border-gray-800">
+                      {category}
+                    </h2>
                   )}
-                </li>
+                  <ol className="space-y-2">
+                    {items.map((entry, i) => {
+                      const idx = globalIdx + i
+                      return <WikiTocEntry key={entry.id} entry={entry} idx={idx} onSelectEntry={onSelectEntry} />
+                    })}
+                  </ol>
+                </section>
               )
             })}
+          </div>
+        ) : (
+          <ol className="space-y-3">
+            {entries.map((entry, i) => (
+              <WikiTocEntry key={entry.id} entry={entry} idx={i} onSelectEntry={onSelectEntry} />
+            ))}
           </ol>
         )}
       </div>
@@ -838,10 +920,12 @@ export function WikiPage() {
 
   function handleNew() {
     const now = new Date().toISOString()
+    const inheritedCategory = selected?.category
     const newEntry: WikiEntry = {
       id: generateId(),
       title: 'Nova entrada',
       content: '',
+      category: inheritedCategory,
       order: entries.length,
       created_at: now,
       updated_at: now,
@@ -1039,42 +1123,57 @@ export function WikiPage() {
                           <Plus className="w-3.5 h-3.5" /> Criar primeira entrada
                         </button>
                       </div>
-                    ) : (
-                      sorted.map((entry, index) => (
-                        <Draggable key={entry.id} draggableId={entry.id} index={index}>
-                          {(prov, snap) => (
-                            <div
-                              ref={prov.innerRef}
-                              {...prov.draggableProps}
-                              className={`flex items-center border-l-2 transition-colors ${
-                                selectedId === entry.id
-                                  ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/40'
-                                  : 'border-transparent hover:bg-white dark:hover:bg-gray-800/60'
-                              } ${snap.isDragging ? 'opacity-75 shadow-md rounded-r-lg' : ''}`}
-                            >
-                              <div
-                                {...prov.dragHandleProps}
-                                className="pl-2 pr-1 py-2.5 text-gray-300 hover:text-gray-400 cursor-grab active:cursor-grabbing flex-shrink-0 touch-none"
-                              >
-                                <GripVertical className="w-3.5 h-3.5" />
-                              </div>
-                              <button
-                                onClick={() => selectEntry(entry.id)}
-                                className="flex-1 text-left py-2.5 pr-4 min-w-0"
-                              >
-                                <p className={`text-sm font-medium truncate ${
-                                  selectedId === entry.id
-                                    ? 'text-amber-700 dark:text-amber-300'
-                                    : 'text-gray-700 dark:text-gray-300'
-                                }`}>
-                                  {entry.title}
+                    ) : (() => {
+                      let lastCat: string | undefined | null = undefined
+                      return sorted.map((entry, index) => {
+                        const cat = entry.category ?? null
+                        const showCatHeader = cat !== lastCat
+                        lastCat = cat
+                        return (
+                          <div key={entry.id}>
+                            {showCatHeader && cat && (
+                              <div className="px-4 pt-3 pb-1">
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-gray-600 truncate">
+                                  {cat}
                                 </p>
-                              </button>
-                            </div>
-                          )}
-                        </Draggable>
-                      ))
-                    )}
+                              </div>
+                            )}
+                            <Draggable draggableId={entry.id} index={index}>
+                              {(prov, snap) => (
+                                <div
+                                  ref={prov.innerRef}
+                                  {...prov.draggableProps}
+                                  className={`flex items-center border-l-2 transition-colors ${
+                                    selectedId === entry.id
+                                      ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/40'
+                                      : 'border-transparent hover:bg-white dark:hover:bg-gray-800/60'
+                                  } ${snap.isDragging ? 'opacity-75 shadow-md rounded-r-lg' : ''}`}
+                                >
+                                  <div
+                                    {...prov.dragHandleProps}
+                                    className="pl-2 pr-1 py-2.5 text-gray-300 hover:text-gray-400 cursor-grab active:cursor-grabbing flex-shrink-0 touch-none"
+                                  >
+                                    <GripVertical className="w-3.5 h-3.5" />
+                                  </div>
+                                  <button
+                                    onClick={() => selectEntry(entry.id)}
+                                    className="flex-1 text-left py-2.5 pr-4 min-w-0"
+                                  >
+                                    <p className={`text-sm font-medium truncate ${
+                                      selectedId === entry.id
+                                        ? 'text-amber-700 dark:text-amber-300'
+                                        : 'text-gray-700 dark:text-gray-300'
+                                    }`}>
+                                      {entry.title}
+                                    </p>
+                                  </button>
+                                </div>
+                              )}
+                            </Draggable>
+                          </div>
+                        )
+                      })
+                    })()}
                     {provided.placeholder}
                   </nav>
                 )}
