@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import {
   Plus, GraduationCap, Pencil, Trash2, FileText, ChevronDown, ChevronUp,
   BookOpen, Link2, Paperclip, Download, X, CalendarDays, Archive, ArchiveRestore,
-  Upload, Loader2, Eye,
+  Upload, Loader2, Eye, Star,
 } from 'lucide-react'
 import { dump, load } from 'js-yaml'
 import { useAuth } from '@/contexts/AuthContext'
@@ -145,6 +145,47 @@ function exportAllYAML(orientacoes: Orientacao[]) {
   URL.revokeObjectURL(url)
 }
 
+/* ─── Deadline pill helpers ───────────────────────────────────────────── */
+
+function addMonths(date: Date, n: number): Date {
+  const d = new Date(date)
+  d.setMonth(d.getMonth() + n)
+  return d
+}
+function monthsElapsed(from: Date): number {
+  const now = new Date()
+  return (now.getFullYear() - from.getFullYear()) * 12 + (now.getMonth() - from.getMonth())
+}
+function fmtDate(d: Date): string {
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
+type PillColor = 'green' | 'yellow' | 'red'
+const PILL_CLASSES: Record<PillColor, string> = {
+  green:  'bg-green-100  text-green-700  dark:bg-green-900/30  dark:text-green-400',
+  yellow: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
+  red:    'bg-red-100    text-red-700    dark:bg-red-900/30    dark:text-red-400',
+}
+
+function calcPrazosOrientacao(curso: string, dataInicio: string) {
+  const inicio = new Date(dataInicio + 'T00:00:00')
+  const elapsed = monthsElapsed(inicio)
+  if (curso === 'Mestrado') {
+    return {
+      qualDate: addMonths(inicio, 18),
+      defDate: addMonths(inicio, 24),
+      qualColor: (elapsed < 12 ? 'green' : elapsed < 18 ? 'yellow' : 'red') as PillColor,
+      defColor: (elapsed < 24 ? 'green' : 'red') as PillColor,
+    }
+  }
+  return {
+    qualDate: addMonths(inicio, 36),
+    defDate: addMonths(inicio, 48),
+    qualColor: (elapsed < 24 ? 'green' : elapsed < 36 ? 'yellow' : 'red') as PillColor,
+    defColor: (elapsed < 48 ? 'green' : 'red') as PillColor,
+  }
+}
+
 /* ─── Constants ───────────────────────────────────────────────────────── */
 
 const CURSOS = ['Doutorado', 'Mestrado', 'Iniciação Científica', 'TCC', 'Pós-Doutorado']
@@ -168,12 +209,16 @@ type OrientacaoForm = {
   ano_ingresso?: number
   previsao_conclusao: string
   exame_qualificacao: boolean
+  data_inicio_orientacao: string
+  data_defesa_tcc: string
 }
 
 const emptyForm: OrientacaoForm = {
   nome_orientando: '', curso: 'Mestrado', titulo_provisorio: '',
   ano_ingresso: undefined, previsao_conclusao: '',
   exame_qualificacao: false,
+  data_inicio_orientacao: '',
+  data_defesa_tcc: '',
 }
 
 /* ─── Component ──────────────────────────────────────────────────────── */
@@ -201,7 +246,11 @@ export function OrientacoesPage() {
   const [novaReuniaoData, setNovaReuniaoData] = useState('')
   const [novaReuniaoTexto, setNovaReuniaoTexto] = useState('')
   const [novaReuniaoFile, setNovaReuniaoFile] = useState<File | null>(null)
+  const [novaReuniaoImportante, setNovaReuniaoImportante] = useState(false)
   const reuniaoFileRef = useRef<HTMLInputElement>(null)
+
+  const [editingReuniaoId, setEditingReuniaoId] = useState<string | null>(null)
+  const [editingReuniaoTexto, setEditingReuniaoTexto] = useState('')
 
   const [novaLeitura, setNovaLeitura] = useState('')
   const [activeLeituraId, setActiveLeituraId] = useState<string | null>(null)
@@ -314,6 +363,8 @@ export function OrientacoesPage() {
       ano_ingresso: o.ano_ingresso,
       previsao_conclusao: o.previsao_conclusao ?? '',
       exame_qualificacao: o.exame_qualificacao ?? false,
+      data_inicio_orientacao: o.data_inicio_orientacao ?? '',
+      data_defesa_tcc: o.data_defesa_tcc ?? '',
     })
     setPendingProjetoOriginal(null)
     setPendingProjetoFile(null)
@@ -335,6 +386,8 @@ export function OrientacoesPage() {
       ano_ingresso: form.ano_ingresso ? Number(form.ano_ingresso) : undefined,
       previsao_conclusao: form.previsao_conclusao,
       exame_qualificacao: form.exame_qualificacao,
+      data_inicio_orientacao: form.data_inicio_orientacao || undefined,
+      data_defesa_tcc: form.data_defesa_tcc || undefined,
       leituras: editing?.leituras ?? [],
       leituras_docs: editing?.leituras_docs ?? [],
       links_documentos: editing?.links_documentos ?? [],
@@ -495,6 +548,7 @@ export function OrientacoesPage() {
       ...(novaReuniaoData ? { data: novaReuniaoData } : {}),
       texto: novaReuniaoTexto.trim(),
       ...(anexo ? { anexo } : {}),
+      ...(novaReuniaoImportante ? { importante: true } : {}),
     }
     const updatedOrientacoes = orientacoes.map(o =>
       o.id !== orientacaoId ? o : { ...o, reunioes: [...(o.reunioes ?? []), entry] }
@@ -503,6 +557,7 @@ export function OrientacoesPage() {
     setNovaReuniaoTexto('')
     setNovaReuniaoData('')
     setNovaReuniaoFile(null)
+    setNovaReuniaoImportante(false)
     setActiveReuniaoId(null)
     const updatedO = updatedOrientacoes.find(o => o.id === orientacaoId)!
     saveOrientacaoFile(updatedO).catch(() => {})
@@ -522,6 +577,19 @@ export function OrientacoesPage() {
       o.id !== orientacaoId ? o : {
         ...o, reunioes: (o.reunioes ?? []).map(r =>
           r.id !== reuniaoId ? r : { ...r, anexo: undefined }
+        ),
+      }
+    )
+    setOrientacoes(updatedOrientacoes)
+    const updatedO = updatedOrientacoes.find(o => o.id === orientacaoId)!
+    saveOrientacaoFile(updatedO).catch(() => {})
+  }
+
+  function updateReuniaoTexto(orientacaoId: string, reuniaoId: string, novoTexto: string) {
+    const updatedOrientacoes = orientacoes.map(o =>
+      o.id !== orientacaoId ? o : {
+        ...o, reunioes: (o.reunioes ?? []).map(r =>
+          r.id !== reuniaoId ? r : { ...r, texto: novoTexto }
         ),
       }
     )
@@ -780,6 +848,24 @@ export function OrientacoesPage() {
                                   Qualificado(a)
                                 </Badge>
                               )}
+                              {(o.curso === 'Mestrado' || o.curso === 'Doutorado') && o.data_inicio_orientacao && (() => {
+                                const p = calcPrazosOrientacao(o.curso, o.data_inicio_orientacao)
+                                return (
+                                  <>
+                                    <span className={`inline-flex items-center text-xs px-2 py-0.5 rounded-full font-medium ${PILL_CLASSES[p.qualColor]}`}>
+                                      Qual: {fmtDate(p.qualDate)}
+                                    </span>
+                                    <span className={`inline-flex items-center text-xs px-2 py-0.5 rounded-full font-medium ${PILL_CLASSES[p.defColor]}`}>
+                                      Defesa: {fmtDate(p.defDate)}
+                                    </span>
+                                  </>
+                                )
+                              })()}
+                              {o.curso === 'TCC' && o.data_defesa_tcc && (
+                                <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full font-medium bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400">
+                                  Defesa TCC: {new Date(o.data_defesa_tcc + 'T00:00:00').toLocaleDateString('pt-BR')}
+                                </span>
+                              )}
                             </div>
                             {o.titulo_provisorio && (
                               <p className="text-sm text-gray-500 dark:text-gray-400 truncate mt-0.5">{o.titulo_provisorio}</p>
@@ -813,7 +899,7 @@ export function OrientacoesPage() {
                               onValueChange={v => setActiveSubTab(prev => ({ ...prev, [o.id]: v }))}
                             >
                               <TabsList className="mb-4 flex-wrap h-auto gap-1">
-                                <TabsTrigger value="reunioes">Reuniões ({reunioes.length})</TabsTrigger>
+                                <TabsTrigger value="reunioes">Reuniões e Cronograma ({reunioes.length})</TabsTrigger>
                                 <TabsTrigger value="leituras">
                                   Leituras ({(o.leituras ?? []).length + leiturasDocs.length})
                                 </TabsTrigger>
@@ -835,7 +921,10 @@ export function OrientacoesPage() {
                                   {sortedReunioes.map((r, idx) => (
                                     <div key={r.id} className="flex gap-3 group">
                                       <div className="flex flex-col items-center pt-1.5 flex-shrink-0">
-                                        <div className="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0" />
+                                        {r.importante
+                                          ? <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400 flex-shrink-0" />
+                                          : <div className="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0 mt-0.5" />
+                                        }
                                         {idx < sortedReunioes.length - 1 && (
                                           <div className="w-px flex-1 bg-gray-200 dark:bg-gray-700 my-1" style={{ minHeight: 24 }} />
                                         )}
@@ -845,11 +934,35 @@ export function OrientacoesPage() {
                                           <div className="flex items-center gap-1.5 mb-1">
                                             <CalendarDays className="w-3 h-3 text-gray-400 dark:text-gray-500" />
                                             <span className="text-xs font-medium text-gray-500 dark:text-gray-400">{r.data}</span>
+                                            {r.importante && <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">Importante</span>}
                                           </div>
                                         ) : (
-                                          <span className="text-xs text-gray-400 dark:text-gray-500 italic mb-1 block">Sem data</span>
+                                          <div className="flex items-center gap-1.5 mb-1">
+                                            <span className="text-xs text-gray-400 dark:text-gray-500 italic">Sem data</span>
+                                            {r.importante && <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">Importante</span>}
+                                          </div>
                                         )}
-                                        <p className="text-sm text-gray-700 dark:text-gray-200 whitespace-pre-wrap">{r.texto}</p>
+                                        {editingReuniaoId === r.id ? (
+                                          <div className="space-y-1.5">
+                                            <Textarea
+                                              value={editingReuniaoTexto}
+                                              onChange={e => setEditingReuniaoTexto(e.target.value)}
+                                              rows={2}
+                                              className="text-sm"
+                                              autoFocus
+                                            />
+                                            <div className="flex gap-1.5">
+                                              <Button size="sm" variant="outline" className="h-6 text-xs px-2" onClick={() => { updateReuniaoTexto(o.id, r.id, editingReuniaoTexto); setEditingReuniaoId(null) }}>
+                                                Salvar
+                                              </Button>
+                                              <Button size="sm" variant="ghost" className="h-6 text-xs px-2" onClick={() => setEditingReuniaoId(null)}>
+                                                Cancelar
+                                              </Button>
+                                            </div>
+                                          </div>
+                                        ) : (
+                                          <p className="text-sm text-gray-700 dark:text-gray-200 whitespace-pre-wrap">{r.texto}</p>
+                                        )}
                                         {r.anexo && (
                                           <div className="mt-2 flex items-center gap-2">
                                             <a
@@ -868,9 +981,14 @@ export function OrientacoesPage() {
                                           </div>
                                         )}
                                       </div>
-                                      <button onClick={() => deleteReuniao(o.id, r.id)} className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-gray-300 dark:text-gray-600 hover:text-red-500 flex-shrink-0 mt-0.5">
-                                        <X className="w-3.5 h-3.5" />
-                                      </button>
+                                      <div className="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 mt-0.5">
+                                        <button onClick={() => { setEditingReuniaoId(r.id); setEditingReuniaoTexto(r.texto) }} className="p-1 text-gray-300 dark:text-gray-600 hover:text-blue-500" title="Editar">
+                                          <Pencil className="w-3 h-3" />
+                                        </button>
+                                        <button onClick={() => deleteReuniao(o.id, r.id)} className="p-1 text-gray-300 dark:text-gray-600 hover:text-red-500" title="Remover">
+                                          <X className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
                                     </div>
                                   ))}
                                 </div>
@@ -888,11 +1006,19 @@ export function OrientacoesPage() {
                                   <Textarea
                                     value={activeReuniaoId === o.id ? novaReuniaoTexto : ''}
                                     onChange={e => { setActiveReuniaoId(o.id); setNovaReuniaoTexto(e.target.value) }}
-                                    placeholder="Anotação da reunião..."
+                                    placeholder="Anotação da reunião ou descrição do prazo"
                                     rows={2}
                                     className="text-sm"
                                   />
                                   <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-1.5 flex-1">
+                                      <Checkbox
+                                        id={`importante-${o.id}`}
+                                        checked={activeReuniaoId === o.id ? novaReuniaoImportante : false}
+                                        onCheckedChange={v => { setActiveReuniaoId(o.id); setNovaReuniaoImportante(Boolean(v)) }}
+                                      />
+                                      <label htmlFor={`importante-${o.id}`} className="text-xs text-gray-500 dark:text-gray-400 cursor-pointer select-none">Importante</label>
+                                    </div>
                                     <button
                                       type="button"
                                       onClick={() => { setActiveReuniaoId(o.id); reuniaoFileRef.current?.click() }}
@@ -1161,6 +1287,42 @@ export function OrientacoesPage() {
                   placeholder="Ex: 2025/1"
                 />
               </div>
+              <div className="space-y-1.5">
+                <Label>Data de Início da Orientação</Label>
+                <Input
+                  type="date"
+                  value={form.data_inicio_orientacao}
+                  onChange={e => setForm(f => ({ ...f, data_inicio_orientacao: e.target.value }))}
+                />
+              </div>
+              {(form.curso === 'Mestrado' || form.curso === 'Doutorado') && form.data_inicio_orientacao && (
+                <div className="col-span-2 space-y-1.5">
+                  <Label className="text-xs text-gray-500 dark:text-gray-400">Prazos calculados automaticamente</Label>
+                  {(() => {
+                    const p = calcPrazosOrientacao(form.curso, form.data_inicio_orientacao)
+                    return (
+                      <div className="flex gap-2 flex-wrap">
+                        <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${PILL_CLASSES[p.qualColor]}`}>
+                          Qualificação: {fmtDate(p.qualDate)}
+                        </span>
+                        <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${PILL_CLASSES[p.defColor]}`}>
+                          Defesa: {fmtDate(p.defDate)}
+                        </span>
+                      </div>
+                    )
+                  })()}
+                </div>
+              )}
+              {form.curso === 'TCC' && (
+                <div className="space-y-1.5">
+                  <Label>Data de Defesa (TCC)</Label>
+                  <Input
+                    type="date"
+                    value={form.data_defesa_tcc}
+                    onChange={e => setForm(f => ({ ...f, data_defesa_tcc: e.target.value }))}
+                  />
+                </div>
+              )}
               <div className="col-span-2 space-y-1.5">
                 <Label>Projeto Original</Label>
                 <div className="flex items-center gap-2 flex-wrap">

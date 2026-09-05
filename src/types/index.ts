@@ -53,6 +53,7 @@ export interface UserProfile {
   x?: string
   telefone?: string
   cpf?: string
+  arquivado?: boolean
   updatedAt: string
 }
 
@@ -127,6 +128,7 @@ export interface NotaReuniao {
   data?: string
   texto: string
   anexo?: Anexo
+  importante?: boolean
 }
 
 export interface LeituraDoc {
@@ -145,6 +147,8 @@ export interface Orientacao {
   previsao_conclusao?: string
   exame_qualificacao?: boolean
   arquivada?: boolean
+  data_inicio_orientacao?: string
+  data_defesa_tcc?: string
   leituras?: string[]
   leituras_docs?: LeituraDoc[]
   reunioes?: NotaReuniao[]

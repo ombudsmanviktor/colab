@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, Pencil, Trash2, ExternalLink, AlertCircle, Download } from 'lucide-react'
+import { Plus, Pencil, Trash2, ExternalLink, AlertCircle, Download, Archive, ArchiveRestore, ChevronDown, ChevronUp } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import {
   loadUsersIndex, saveUsersIndex, addUser, removeUser,
@@ -356,7 +356,7 @@ function ProfileDialog({ open, onOpenChange, email, profile, isAdmin, isAdminUse
 
 function ProfileCard({
   email, profile, isAdmin, isAdminUser, canEdit, isSelf, canSeeCpf,
-  onEdit, onRemove,
+  onEdit, onRemove, onArchive,
 }: {
   email: string
   profile: UserProfile | undefined
@@ -367,6 +367,7 @@ function ProfileCard({
   canSeeCpf: boolean
   onEdit: () => void
   onRemove: () => void
+  onArchive: () => void
 }) {
   const awaiting = !profile?.nome || !profile?.status
 
@@ -425,6 +426,11 @@ function ProfileCard({
             {canEdit && (
               <button onClick={onEdit} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" title="Editar perfil">
                 <Pencil className="w-3.5 h-3.5" />
+              </button>
+            )}
+            {isAdmin && !isSelf && (
+              <button onClick={onArchive} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors" title={profile?.arquivado ? 'Reativar usuário' : 'Arquivar usuário'}>
+                {profile?.arquivado ? <ArchiveRestore className="w-3.5 h-3.5 text-green-500" /> : <Archive className="w-3.5 h-3.5" />}
               </button>
             )}
             {isAdmin && !isSelf && (
@@ -506,6 +512,7 @@ export function Usuarios() {
   const [newUserOpen, setNewUserOpen] = useState(false)
   const [editEmail, setEditEmail] = useState<string | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [showArchived, setShowArchived] = useState(false)
 
   const myEmail = session?.email ?? ''
 
@@ -523,11 +530,15 @@ export function Usuarios() {
   })
   const profileMap = new Map(profiles.map(p => [p.email, p]))
 
+  const activeEmails = emails.filter(e => !profileMap.get(e)?.arquivado)
+  const archivedEmails = emails.filter(e => profileMap.get(e)?.arquivado)
+
   // Sort: self first, then alphabetically by email
   const sortedEmails = [
-    ...(emails.includes(myEmail) ? [myEmail] : []),
-    ...emails.filter(e => e !== myEmail).sort((a, b) => a.localeCompare(b)),
+    ...(activeEmails.includes(myEmail) ? [myEmail] : []),
+    ...activeEmails.filter(e => e !== myEmail).sort((a, b) => a.localeCompare(b)),
   ]
+  const sortedArchivedEmails = archivedEmails.sort((a, b) => a.localeCompare(b))
 
   const admins = index?.admins ?? []
   // Derive admin status from live query data (not stale session flag)
@@ -570,6 +581,27 @@ export function Usuarios() {
       await saveUsersIndex(updated)
       queryClient.setQueryData(['users-index'], updated)
     } catch (err) {
+      toast({ title: 'Erro', description: String(err), variant: 'destructive' })
+    }
+  }
+
+  async function handleArchiveUser(email: string) {
+    const current = profileMap.get(email)
+    const isNowArchived = !current?.arquivado
+    const updated: UserProfile = {
+      ...(current ?? { email, nome: '', updatedAt: new Date().toISOString() }),
+      arquivado: isNowArchived || undefined,
+      updatedAt: new Date().toISOString(),
+    }
+    queryClient.setQueryData(['all-profiles', emails], (prev: UserProfile[] = []) => {
+      const exists = prev.some(p => p.email === email)
+      return exists ? prev.map(p => p.email === email ? updated : p) : [...prev, updated]
+    })
+    try {
+      await saveUserProfile(updated)
+      toast({ title: isNowArchived ? 'Usuário arquivado' : 'Usuário reativado' })
+    } catch (err) {
+      queryClient.invalidateQueries({ queryKey: ['all-profiles', emails] })
       toast({ title: 'Erro', description: String(err), variant: 'destructive' })
     }
   }
@@ -631,27 +663,80 @@ export function Usuarios() {
       </div>
 
       {/* Profile cards */}
-      {sortedEmails.length === 0 ? (
+      {sortedEmails.length === 0 && sortedArchivedEmails.length === 0 ? (
         <div className="text-center py-16 text-gray-400 dark:text-gray-500">
           <p>Nenhum usuário cadastrado.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {sortedEmails.map((email) => (
-            <ProfileCard
-              key={email}
-              email={email}
-              profile={profileMap.get(email)}
-              isAdmin={isAdmin}
-              isAdminUser={admins.includes(email)}
-              canEdit={isAdmin || email === myEmail}
-              isSelf={email === myEmail}
-              canSeeCpf={isLider || email === myEmail}
-              onEdit={() => openEdit(email)}
-              onRemove={() => handleRemoveUser(email)}
-            />
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {sortedEmails.map((email) => (
+              <ProfileCard
+                key={email}
+                email={email}
+                profile={profileMap.get(email)}
+                isAdmin={isAdmin}
+                isAdminUser={admins.includes(email)}
+                canEdit={isAdmin || email === myEmail}
+                isSelf={email === myEmail}
+                canSeeCpf={isLider || email === myEmail}
+                onEdit={() => openEdit(email)}
+                onRemove={() => handleRemoveUser(email)}
+                onArchive={() => handleArchiveUser(email)}
+              />
+            ))}
+          </div>
+
+          {/* Archived users */}
+          {sortedArchivedEmails.length > 0 && (
+            <div className="mt-2 pt-4 border-t border-dashed border-gray-200 dark:border-gray-700">
+              <button
+                className="flex items-center gap-2 text-sm text-gray-400 dark:text-gray-500 hover:text-gray-500 dark:hover:text-gray-300 transition-colors mb-3"
+                onClick={() => setShowArchived(v => !v)}
+              >
+                {showArchived ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                <Archive className="w-4 h-4" />
+                <span>Usuários Arquivados ({sortedArchivedEmails.length})</span>
+              </button>
+              {showArchived && (
+                <div className="space-y-1.5">
+                  {sortedArchivedEmails.map(email => {
+                    const profile = profileMap.get(email)
+                    return (
+                      <div key={email} className="flex items-center gap-3 px-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-700 rounded-lg group hover:border-gray-200 dark:hover:border-gray-600 transition-colors">
+                        <div className="w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center flex-shrink-0">
+                          <span className="text-xs font-bold text-gray-400 dark:text-gray-500">{emailInitials(email)}</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <span className="text-sm font-medium text-gray-500 dark:text-gray-400">{profile?.nome || email}</span>
+                          <p className="text-xs text-gray-400 dark:text-gray-500 truncate">{email}</p>
+                        </div>
+                        {profile?.status && (
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium opacity-60 ${statusColor(profile.status)}`}>
+                            {statusLabel(profile.status)}
+                          </span>
+                        )}
+                        {isAdmin && (
+                          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Button variant="ghost" size="icon" className="h-7 w-7" title="Reativar" onClick={() => handleArchiveUser(email)}>
+                              <ArchiveRestore className="w-3.5 h-3.5 text-green-500" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-7 w-7" title="Editar" onClick={() => openEdit(email)}>
+                              <Pencil className="w-3 h-3" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-7 w-7" title="Excluir" onClick={() => handleRemoveUser(email)}>
+                              <Trash2 className="w-3 h-3 text-red-500" />
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </>
       )}
 
       {/* New user dialog */}
