@@ -252,6 +252,7 @@ export function OrientacoesPage() {
 
   const [editingReuniaoId, setEditingReuniaoId] = useState<string | null>(null)
   const [editingReuniaoTexto, setEditingReuniaoTexto] = useState('')
+  const [editingReuniaoData, setEditingReuniaoData] = useState('')
 
   const [novaLeitura, setNovaLeitura] = useState('')
   const [activeLeituraId, setActiveLeituraId] = useState<string | null>(null)
@@ -584,11 +585,11 @@ export function OrientacoesPage() {
     saveOrientacaoFile(updatedO).catch(() => {})
   }
 
-  function updateReuniaoTexto(orientacaoId: string, reuniaoId: string, novoTexto: string) {
+  function updateReuniao(orientacaoId: string, reuniaoId: string, novoTexto: string, novaData: string) {
     const updatedOrientacoes = orientacoes.map(o =>
       o.id !== orientacaoId ? o : {
         ...o, reunioes: (o.reunioes ?? []).map(r =>
-          r.id !== reuniaoId ? r : { ...r, texto: novoTexto }
+          r.id !== reuniaoId ? r : { ...r, texto: novoTexto, ...(novaData ? { data: novaData } : { data: undefined }) }
         ),
       }
     )
@@ -899,7 +900,7 @@ export function OrientacoesPage() {
                               onValueChange={v => setActiveSubTab(prev => ({ ...prev, [o.id]: v }))}
                             >
                               <TabsList className="mb-4 flex-wrap h-auto gap-1">
-                                <TabsTrigger value="reunioes">Reuniões e Cronograma ({reunioes.length})</TabsTrigger>
+                                <TabsTrigger value="reunioes">Reuniões e Prazos ({reunioes.length})</TabsTrigger>
                                 <TabsTrigger value="leituras">
                                   Leituras ({(o.leituras ?? []).length + leiturasDocs.length})
                                 </TabsTrigger>
@@ -918,32 +919,36 @@ export function OrientacoesPage() {
                                   {sortedReunioes.length === 0 && (
                                     <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-4">Nenhuma anotação registrada</p>
                                   )}
-                                  {sortedReunioes.map((r, idx) => (
+                                  {sortedReunioes.map((r, idx) => {
+                                    const isPast = r.data ? r.data < new Date().toISOString().slice(0, 10) : false
+                                    const dotColor = isPast
+                                      ? 'text-gray-400 fill-gray-400'
+                                      : 'text-amber-400 fill-amber-400'
+                                    const dotBg = isPast ? 'bg-gray-300 dark:bg-gray-600' : 'bg-amber-400'
+                                    return (
                                     <div key={r.id} className="flex gap-3 group">
                                       <div className="flex flex-col items-center pt-1.5 flex-shrink-0">
                                         {r.importante
-                                          ? <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400 flex-shrink-0" />
-                                          : <div className="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0 mt-0.5" />
+                                          ? <Star className={`w-3.5 h-3.5 flex-shrink-0 ${dotColor}`} />
+                                          : <div className={`w-2 h-2 rounded-full flex-shrink-0 mt-0.5 ${dotBg}`} />
                                         }
                                         {idx < sortedReunioes.length - 1 && (
                                           <div className="w-px flex-1 bg-gray-200 dark:bg-gray-700 my-1" style={{ minHeight: 24 }} />
                                         )}
                                       </div>
                                       <div className="flex-1 pb-4">
-                                        {r.data ? (
-                                          <div className="flex items-center gap-1.5 mb-1">
-                                            <CalendarDays className="w-3 h-3 text-gray-400 dark:text-gray-500" />
-                                            <span className="text-xs font-medium text-gray-500 dark:text-gray-400">{r.data}</span>
-                                            {r.importante && <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">Importante</span>}
-                                          </div>
-                                        ) : (
-                                          <div className="flex items-center gap-1.5 mb-1">
-                                            <span className="text-xs text-gray-400 dark:text-gray-500 italic">Sem data</span>
-                                            {r.importante && <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">Importante</span>}
-                                          </div>
-                                        )}
                                         {editingReuniaoId === r.id ? (
                                           <div className="space-y-1.5">
+                                            <div className="flex items-center gap-2">
+                                              <CalendarDays className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500 flex-shrink-0" />
+                                              <Input
+                                                type="date"
+                                                value={editingReuniaoData}
+                                                onChange={e => setEditingReuniaoData(e.target.value)}
+                                                className="h-7 text-xs w-40"
+                                              />
+                                              <span className="text-xs text-gray-400 dark:text-gray-500">data opcional</span>
+                                            </div>
                                             <Textarea
                                               value={editingReuniaoTexto}
                                               onChange={e => setEditingReuniaoTexto(e.target.value)}
@@ -952,7 +957,7 @@ export function OrientacoesPage() {
                                               autoFocus
                                             />
                                             <div className="flex gap-1.5">
-                                              <Button size="sm" variant="outline" className="h-6 text-xs px-2" onClick={() => { updateReuniaoTexto(o.id, r.id, editingReuniaoTexto); setEditingReuniaoId(null) }}>
+                                              <Button size="sm" variant="outline" className="h-6 text-xs px-2" onClick={() => { updateReuniao(o.id, r.id, editingReuniaoTexto, editingReuniaoData); setEditingReuniaoId(null) }}>
                                                 Salvar
                                               </Button>
                                               <Button size="sm" variant="ghost" className="h-6 text-xs px-2" onClick={() => setEditingReuniaoId(null)}>
@@ -961,7 +966,21 @@ export function OrientacoesPage() {
                                             </div>
                                           </div>
                                         ) : (
-                                          <p className="text-sm text-gray-700 dark:text-gray-200 whitespace-pre-wrap">{r.texto}</p>
+                                          <>
+                                            {r.data ? (
+                                              <div className="flex items-center gap-1.5 mb-1">
+                                                <CalendarDays className="w-3 h-3 text-gray-400 dark:text-gray-500" />
+                                                <span className={`text-xs font-medium ${isPast ? 'text-gray-400 dark:text-gray-500' : 'text-gray-500 dark:text-gray-400'}`}>{r.data}</span>
+                                                {r.importante && <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">Importante</span>}
+                                              </div>
+                                            ) : (
+                                              <div className="flex items-center gap-1.5 mb-1">
+                                                <span className="text-xs text-gray-400 dark:text-gray-500 italic">Sem data</span>
+                                                {r.importante && <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">Importante</span>}
+                                              </div>
+                                            )}
+                                            <p className="text-sm text-gray-700 dark:text-gray-200 whitespace-pre-wrap">{r.texto}</p>
+                                          </>
                                         )}
                                         {r.anexo && (
                                           <div className="mt-2 flex items-center gap-2">
@@ -982,7 +1001,7 @@ export function OrientacoesPage() {
                                         )}
                                       </div>
                                       <div className="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 mt-0.5">
-                                        <button onClick={() => { setEditingReuniaoId(r.id); setEditingReuniaoTexto(r.texto) }} className="p-1 text-gray-300 dark:text-gray-600 hover:text-blue-500" title="Editar">
+                                        <button onClick={() => { setEditingReuniaoId(r.id); setEditingReuniaoTexto(r.texto); setEditingReuniaoData(r.data ?? '') }} className="p-1 text-gray-300 dark:text-gray-600 hover:text-blue-500" title="Editar">
                                           <Pencil className="w-3 h-3" />
                                         </button>
                                         <button onClick={() => deleteReuniao(o.id, r.id)} className="p-1 text-gray-300 dark:text-gray-600 hover:text-red-500" title="Remover">
@@ -990,7 +1009,8 @@ export function OrientacoesPage() {
                                         </button>
                                       </div>
                                     </div>
-                                  ))}
+                                    )
+                                  })}
                                 </div>
                                 <div className="border border-gray-200 dark:border-gray-600 rounded-lg p-3 space-y-2 bg-gray-50 dark:bg-gray-800" onClick={e => e.stopPropagation()}>
                                   <div className="flex items-center gap-2">
