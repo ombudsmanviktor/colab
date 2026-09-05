@@ -49,7 +49,7 @@ function downloadNotasMarkdown(o: Orientacao) {
     `**Curso:** ${o.curso}`,
   ]
   if (o.titulo_provisorio) lines.push(`**Título Provisório:** ${o.titulo_provisorio}`)
-  if (o.ano_ingresso) lines.push(`**Ano de Ingresso:** ${o.ano_ingresso}`)
+  if (o.data_inicio_orientacao) lines.push(`**Ingresso:** ${new Date(o.data_inicio_orientacao + 'T00:00:00').toLocaleDateString('pt-BR')}`)
   if (o.previsao_conclusao) lines.push(`**Previsão de Conclusão:** ${o.previsao_conclusao}`)
   lines.push(``, `---`, ``)
   if (sorted.length === 0) {
@@ -81,7 +81,8 @@ function exportPDF(orientacoes: Orientacao[]) {
     head: [['Orientado(a)', 'Curso', 'Título Provisório', 'Ingresso', 'Conclusão']],
     body: orientacoes.map(o => [
       o.nome_orientando, o.curso, o.titulo_provisorio ?? '—',
-      o.ano_ingresso ? String(o.ano_ingresso) : '—', o.previsao_conclusao ?? '—',
+      o.data_inicio_orientacao ? new Date(o.data_inicio_orientacao + 'T00:00:00').toLocaleDateString('pt-BR') : '—',
+      o.previsao_conclusao ?? '—',
     ]),
     styles: { fontSize: 9 },
     headStyles: { fillColor: [217, 119, 6] },
@@ -94,7 +95,7 @@ function exportExcel(orientacoes: Orientacao[]) {
     'Orientado(a)': o.nome_orientando,
     Curso: o.curso,
     'Título Provisório': o.titulo_provisorio ?? '',
-    'Ano Ingresso': o.ano_ingresso ?? '',
+    'Ano Ingresso': o.data_inicio_orientacao ? new Date(o.data_inicio_orientacao + 'T00:00:00').toLocaleDateString('pt-BR') : '',
     'Previsão Conclusão': o.previsao_conclusao ?? '',
     'Exame de Qualificação': o.exame_qualificacao ? 'Sim' : '',
   })))
@@ -109,7 +110,7 @@ function exportAllYAML(orientacoes: Orientacao[]) {
     nome_orientando: o.nome_orientando,
     curso: o.curso,
     ...(o.titulo_provisorio ? { titulo_provisorio: o.titulo_provisorio } : {}),
-    ...(o.ano_ingresso != null ? { ano_ingresso: o.ano_ingresso } : {}),
+    ...(o.data_inicio_orientacao ? { data_inicio_orientacao: o.data_inicio_orientacao } : {}),
     ...(o.previsao_conclusao ? { previsao_conclusao: o.previsao_conclusao } : {}),
     ...(o.exame_qualificacao ? { exame_qualificacao: true } : {}),
     ...(o.arquivada ? { arquivada: true } : {}),
@@ -206,7 +207,6 @@ type OrientacaoForm = {
   nome_orientando: string
   curso: string
   titulo_provisorio: string
-  ano_ingresso?: number
   previsao_conclusao: string
   exame_qualificacao: boolean
   data_inicio_orientacao: string
@@ -215,7 +215,7 @@ type OrientacaoForm = {
 
 const emptyForm: OrientacaoForm = {
   nome_orientando: '', curso: 'Mestrado', titulo_provisorio: '',
-  ano_ingresso: undefined, previsao_conclusao: '',
+  previsao_conclusao: '',
   exame_qualificacao: false,
   data_inicio_orientacao: '',
   data_defesa_tcc: '',
@@ -360,7 +360,6 @@ export function OrientacoesPage() {
       nome_orientando: o.nome_orientando,
       curso: o.curso,
       titulo_provisorio: o.titulo_provisorio ?? '',
-      ano_ingresso: o.ano_ingresso,
       previsao_conclusao: o.previsao_conclusao ?? '',
       exame_qualificacao: o.exame_qualificacao ?? false,
       data_inicio_orientacao: o.data_inicio_orientacao ?? '',
@@ -383,7 +382,6 @@ export function OrientacoesPage() {
       nome_orientando: form.nome_orientando,
       curso: form.curso,
       titulo_provisorio: form.titulo_provisorio,
-      ano_ingresso: form.ano_ingresso ? Number(form.ano_ingresso) : undefined,
       previsao_conclusao: form.previsao_conclusao,
       exame_qualificacao: form.exame_qualificacao,
       data_inicio_orientacao: form.data_inicio_orientacao || undefined,
@@ -478,7 +476,7 @@ export function OrientacoesPage() {
           nome_orientando: (item.nome_orientando as string) ?? '',
           curso: (item.curso as string) ?? 'Mestrado',
           titulo_provisorio: item.titulo_provisorio as string | undefined,
-          ano_ingresso: item.ano_ingresso as number | undefined,
+          data_inicio_orientacao: (item.data_inicio_orientacao as string | undefined),
           previsao_conclusao: item.previsao_conclusao as string | undefined,
           exame_qualificacao: item.exame_qualificacao as boolean | undefined,
           arquivada: item.arquivada as boolean | undefined,
@@ -871,7 +869,7 @@ export function OrientacoesPage() {
                               <p className="text-sm text-gray-500 dark:text-gray-400 truncate mt-0.5">{o.titulo_provisorio}</p>
                             )}
                             <div className="flex items-center gap-3 text-xs text-gray-400 dark:text-gray-500 mt-0.5 flex-wrap">
-                              {o.ano_ingresso && <span>Ingresso: {o.ano_ingresso}</span>}
+                              {o.data_inicio_orientacao && <span>Ingresso: {new Date(o.data_inicio_orientacao + 'T00:00:00').toLocaleDateString('pt-BR')}</span>}
                               {o.previsao_conclusao && <span>Conclusão: {o.previsao_conclusao}</span>}
                               {reunioes.length > 0 && <span>{reunioes.length} reunião(ões)</span>}
                               {leiturasDocs.length > 0 && <span>{leiturasDocs.length} doc(s)</span>}
@@ -1273,10 +1271,9 @@ export function OrientacoesPage() {
               <div className="space-y-1.5">
                 <Label>Ano de Ingresso</Label>
                 <Input
-                  type="number"
-                  value={form.ano_ingresso ?? ''}
-                  onChange={e => setForm(f => ({ ...f, ano_ingresso: e.target.value ? Number(e.target.value) : undefined }))}
-                  placeholder="2023"
+                  type="date"
+                  value={form.data_inicio_orientacao}
+                  onChange={e => setForm(f => ({ ...f, data_inicio_orientacao: e.target.value }))}
                 />
               </div>
               <div className="space-y-1.5">
@@ -1285,14 +1282,6 @@ export function OrientacoesPage() {
                   value={form.previsao_conclusao}
                   onChange={e => setForm(f => ({ ...f, previsao_conclusao: e.target.value }))}
                   placeholder="Ex: 2025/1"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Data de Início da Orientação</Label>
-                <Input
-                  type="date"
-                  value={form.data_inicio_orientacao}
-                  onChange={e => setForm(f => ({ ...f, data_inicio_orientacao: e.target.value }))}
                 />
               </div>
               {(form.curso === 'Mestrado' || form.curso === 'Doutorado') && form.data_inicio_orientacao && (
