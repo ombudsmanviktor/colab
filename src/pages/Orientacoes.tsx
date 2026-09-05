@@ -161,11 +161,12 @@ function fmtDate(d: Date): string {
   return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
-type PillColor = 'green' | 'yellow' | 'red'
+type PillColor = 'green' | 'yellow' | 'red' | 'gray'
 const PILL_CLASSES: Record<PillColor, string> = {
   green:  'bg-green-100  text-green-700  dark:bg-green-900/30  dark:text-green-400',
   yellow: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
   red:    'bg-red-100    text-red-700    dark:bg-red-900/30    dark:text-red-400',
+  gray:   'bg-gray-100   text-gray-500   dark:bg-gray-700      dark:text-gray-400',
 }
 
 function calcPrazosOrientacao(curso: string, dataInicio: string) {
@@ -848,9 +849,10 @@ export function OrientacoesPage() {
                               )}
                               {(o.curso === 'Mestrado' || o.curso === 'Doutorado') && o.data_inicio_orientacao && (() => {
                                 const p = calcPrazosOrientacao(o.curso, o.data_inicio_orientacao)
+                                const qualColor: PillColor = o.exame_qualificacao ? 'gray' : p.qualColor
                                 return (
                                   <>
-                                    <span className={`inline-flex items-center text-xs px-2 py-0.5 rounded-full font-medium ${PILL_CLASSES[p.qualColor]}`}>
+                                    <span className={`inline-flex items-center text-xs px-2 py-0.5 rounded-full font-medium ${PILL_CLASSES[qualColor]}`}>
                                       Qual: {fmtDate(p.qualDate)}
                                     </span>
                                     <span className={`inline-flex items-center text-xs px-2 py-0.5 rounded-full font-medium ${PILL_CLASSES[p.defColor]}`}>
@@ -1289,9 +1291,10 @@ export function OrientacoesPage() {
                   <Label className="text-xs text-gray-500 dark:text-gray-400">Prazos calculados automaticamente</Label>
                   {(() => {
                     const p = calcPrazosOrientacao(form.curso, form.data_inicio_orientacao)
+                    const qualColor: PillColor = form.exame_qualificacao ? 'gray' : p.qualColor
                     return (
                       <div className="flex gap-2 flex-wrap">
-                        <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${PILL_CLASSES[p.qualColor]}`}>
+                        <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${PILL_CLASSES[qualColor]}`}>
                           Qualificação: {fmtDate(p.qualDate)}
                         </span>
                         <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${PILL_CLASSES[p.defColor]}`}>
