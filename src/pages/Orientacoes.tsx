@@ -248,6 +248,7 @@ export function OrientacoesPage() {
   const [novaReuniaoTexto, setNovaReuniaoTexto] = useState('')
   const [novaReuniaoFile, setNovaReuniaoFile] = useState<File | null>(null)
   const [novaReuniaoImportante, setNovaReuniaoImportante] = useState(false)
+  const [novaReuniaoTarefa, setNovaReuniaoTarefa] = useState(false)
   const reuniaoFileRef = useRef<HTMLInputElement>(null)
 
   const [editingReuniaoId, setEditingReuniaoId] = useState<string | null>(null)
@@ -549,6 +550,7 @@ export function OrientacoesPage() {
       texto: novaReuniaoTexto.trim(),
       ...(anexo ? { anexo } : {}),
       ...(novaReuniaoImportante ? { importante: true } : {}),
+      ...(novaReuniaoTarefa ? { tarefa: true } : {}),
     }
     const updatedOrientacoes = orientacoes.map(o =>
       o.id !== orientacaoId ? o : { ...o, reunioes: [...(o.reunioes ?? []), entry] }
@@ -558,6 +560,7 @@ export function OrientacoesPage() {
     setNovaReuniaoData('')
     setNovaReuniaoFile(null)
     setNovaReuniaoImportante(false)
+    setNovaReuniaoTarefa(false)
     setActiveReuniaoId(null)
     const updatedO = updatedOrientacoes.find(o => o.id === orientacaoId)!
     saveOrientacaoFile(updatedO).catch(() => {})
@@ -590,6 +593,19 @@ export function OrientacoesPage() {
       o.id !== orientacaoId ? o : {
         ...o, reunioes: (o.reunioes ?? []).map(r =>
           r.id !== reuniaoId ? r : { ...r, texto: novoTexto, ...(novaData ? { data: novaData } : { data: undefined }) }
+        ),
+      }
+    )
+    setOrientacoes(updatedOrientacoes)
+    const updatedO = updatedOrientacoes.find(o => o.id === orientacaoId)!
+    saveOrientacaoFile(updatedO).catch(() => {})
+  }
+
+  function toggleTarefaCumprida(orientacaoId: string, reuniaoId: string) {
+    const updatedOrientacoes = orientacoes.map(o =>
+      o.id !== orientacaoId ? o : {
+        ...o, reunioes: (o.reunioes ?? []).map(r =>
+          r.id !== reuniaoId ? r : { ...r, tarefa_cumprida: !r.tarefa_cumprida }
         ),
       }
     )
@@ -921,12 +937,11 @@ export function OrientacoesPage() {
                                   )}
                                   {sortedReunioes.map((r, idx) => {
                                     const isPast = r.data ? r.data < new Date().toISOString().slice(0, 10) : false
-                                    const dotColor = isPast
-                                      ? 'text-gray-400 fill-gray-400'
-                                      : 'text-amber-400 fill-amber-400'
-                                    const dotBg = isPast ? 'bg-gray-300 dark:bg-gray-600' : 'bg-amber-400'
+                                    const done = r.tarefa && r.tarefa_cumprida
+                                    const dotColor = (isPast || done) ? 'text-gray-400 fill-gray-400' : 'text-amber-400 fill-amber-400'
+                                    const dotBg = (isPast || done) ? 'bg-gray-300 dark:bg-gray-600' : 'bg-amber-400'
                                     return (
-                                    <div key={r.id} className="flex gap-3 group">
+                                    <div key={r.id} className={`flex gap-3 group transition-opacity ${done ? 'opacity-50' : ''}`}>
                                       <div className="flex flex-col items-center pt-1.5 flex-shrink-0">
                                         {r.importante
                                           ? <Star className={`w-3.5 h-3.5 flex-shrink-0 ${dotColor}`} />
@@ -968,18 +983,40 @@ export function OrientacoesPage() {
                                         ) : (
                                           <>
                                             {r.data ? (
-                                              <div className="flex items-center gap-1.5 mb-1">
+                                              <div className="flex items-center gap-1.5 mb-1 flex-wrap">
                                                 <CalendarDays className="w-3 h-3 text-gray-400 dark:text-gray-500" />
                                                 <span className={`text-xs font-medium ${isPast ? 'text-gray-400 dark:text-gray-500' : 'text-gray-500 dark:text-gray-400'}`}>{r.data}</span>
                                                 {r.importante && <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">Importante</span>}
+                                                {r.tarefa && (
+                                                  <button
+                                                    onClick={e => { e.stopPropagation(); toggleTarefaCumprida(o.id, r.id) }}
+                                                    className="flex items-center gap-1 text-xs font-medium px-1.5 py-0.5 rounded transition-colors"
+                                                  >
+                                                    <Checkbox checked={!!r.tarefa_cumprida} onCheckedChange={() => toggleTarefaCumprida(o.id, r.id)} className="w-3 h-3" />
+                                                    <span className={done ? 'text-gray-400 dark:text-gray-500' : 'text-blue-600 dark:text-blue-400'}>
+                                                      {done ? 'Prazo Cumprido' : 'Prazo A Cumprir'}
+                                                    </span>
+                                                  </button>
+                                                )}
                                               </div>
                                             ) : (
-                                              <div className="flex items-center gap-1.5 mb-1">
+                                              <div className="flex items-center gap-1.5 mb-1 flex-wrap">
                                                 <span className="text-xs text-gray-400 dark:text-gray-500 italic">Sem data</span>
                                                 {r.importante && <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">Importante</span>}
+                                                {r.tarefa && (
+                                                  <button
+                                                    onClick={e => { e.stopPropagation(); toggleTarefaCumprida(o.id, r.id) }}
+                                                    className="flex items-center gap-1 text-xs font-medium px-1.5 py-0.5 rounded transition-colors"
+                                                  >
+                                                    <Checkbox checked={!!r.tarefa_cumprida} onCheckedChange={() => toggleTarefaCumprida(o.id, r.id)} className="w-3 h-3" />
+                                                    <span className={done ? 'text-gray-400 dark:text-gray-500' : 'text-blue-600 dark:text-blue-400'}>
+                                                      {done ? 'Prazo Cumprido' : 'Prazo A Cumprir'}
+                                                    </span>
+                                                  </button>
+                                                )}
                                               </div>
                                             )}
-                                            <p className="text-sm text-gray-700 dark:text-gray-200 whitespace-pre-wrap">{r.texto}</p>
+                                            <p className={`text-sm whitespace-pre-wrap ${done ? 'text-gray-400 dark:text-gray-500 line-through' : 'text-gray-700 dark:text-gray-200'}`}>{r.texto}</p>
                                           </>
                                         )}
                                         {r.anexo && (
@@ -1030,14 +1067,22 @@ export function OrientacoesPage() {
                                     rows={2}
                                     className="text-sm"
                                   />
-                                  <div className="flex items-center gap-2">
-                                    <div className="flex items-center gap-1.5 flex-1">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <div className="flex items-center gap-1.5">
                                       <Checkbox
                                         id={`importante-${o.id}`}
                                         checked={activeReuniaoId === o.id ? novaReuniaoImportante : false}
                                         onCheckedChange={v => { setActiveReuniaoId(o.id); setNovaReuniaoImportante(Boolean(v)) }}
                                       />
                                       <label htmlFor={`importante-${o.id}`} className="text-xs text-gray-500 dark:text-gray-400 cursor-pointer select-none">Importante</label>
+                                    </div>
+                                    <div className="flex items-center gap-1.5 flex-1">
+                                      <Checkbox
+                                        id={`tarefa-${o.id}`}
+                                        checked={activeReuniaoId === o.id ? novaReuniaoTarefa : false}
+                                        onCheckedChange={v => { setActiveReuniaoId(o.id); setNovaReuniaoTarefa(Boolean(v)) }}
+                                      />
+                                      <label htmlFor={`tarefa-${o.id}`} className="text-xs text-gray-500 dark:text-gray-400 cursor-pointer select-none">Tarefa ou Prazo Definido</label>
                                     </div>
                                     <button
                                       type="button"

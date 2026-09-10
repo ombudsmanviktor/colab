@@ -129,6 +129,8 @@ export interface NotaReuniao {
   texto: string
   anexo?: Anexo
   importante?: boolean
+  tarefa?: boolean
+  tarefa_cumprida?: boolean
 }
 
 export interface LeituraDoc {
