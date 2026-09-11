@@ -1211,24 +1211,23 @@ export function OrientacoesPage() {
                                           rows={2} className="text-sm"
                                         />
                                         <div className="flex items-center gap-3 flex-wrap">
-                                          {/* Toggle: Reunião ⟷ Tarefa */}
+                                          {/* Toggle: Reunião ⟷ Prazo */}
                                           {(() => {
                                             const isTarefa = activeReuniaoId === o.id ? novaReuniaoTarefa : false
                                             return (
-                                              <button
-                                                type="button"
-                                                role="switch"
-                                                aria-checked={isTarefa}
-                                                onClick={() => { setActiveReuniaoId(o.id); setNovaReuniaoTarefa(!isTarefa) }}
-                                                className="flex items-center gap-0 rounded-full border border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-900 p-0.5 h-6 w-36 relative transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
-                                                title={isTarefa ? 'Prazo / Tarefa' : 'Anotação de Reunião'}
-                                              >
-                                                {/* Labels */}
-                                                <span className={`absolute left-2 text-[10px] font-medium transition-opacity select-none ${isTarefa ? 'opacity-40' : 'opacity-100 text-gray-600 dark:text-gray-300'}`}>Reunião</span>
-                                                <span className={`absolute right-2 text-[10px] font-medium transition-opacity select-none ${isTarefa ? 'opacity-100 text-amber-600 dark:text-amber-400' : 'opacity-40'}`}>Prazo</span>
-                                                {/* Thumb */}
-                                                <span className={`inline-block h-5 w-5 rounded-full shadow transition-all duration-200 flex-shrink-0 ${isTarefa ? 'translate-x-[5.5rem] bg-amber-400' : 'translate-x-0 bg-gray-400 dark:bg-gray-500'}`} />
-                                              </button>
+                                              <div className="flex items-center gap-2">
+                                                <span className={`text-xs font-medium select-none transition-colors ${isTarefa ? 'text-gray-400 dark:text-gray-600' : 'text-gray-700 dark:text-gray-200'}`}>Reunião</span>
+                                                <button
+                                                  type="button"
+                                                  role="switch"
+                                                  aria-checked={isTarefa}
+                                                  onClick={() => { setActiveReuniaoId(o.id); setNovaReuniaoTarefa(!isTarefa) }}
+                                                  className="relative flex items-center rounded-full border border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-900 p-0.5 h-6 w-10 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 transition-colors"
+                                                >
+                                                  <span className={`inline-block h-5 w-5 rounded-full shadow transition-all duration-200 flex-shrink-0 ${isTarefa ? 'translate-x-4 bg-amber-400' : 'translate-x-0 bg-gray-400 dark:bg-gray-500'}`} style={isTarefa ? { backgroundColor: '#FFB351' } : {}} />
+                                                </button>
+                                                <span className={`text-xs font-medium select-none transition-colors ${isTarefa ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400 dark:text-gray-600'}`}>Prazo</span>
+                                              </div>
                                             )
                                           })()}
                                           {/* Importante checkbox */}
