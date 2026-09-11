@@ -72,6 +72,171 @@ function downloadNotasMarkdown(o: Orientacao) {
   URL.revokeObjectURL(url)
 }
 
+function downloadPrazosMarkdown(o: Orientacao) {
+  const prazos = (o.reunioes ?? []).filter(r => r.tarefa).sort((a, b) => {
+    if (a.data && b.data) return a.data.localeCompare(b.data)
+    if (a.data) return -1
+    if (b.data) return 1
+    return 0
+  })
+  const lines: string[] = [
+    `# Prazos e Tarefas`,
+    ``,
+    `**Orientado(a):** ${o.nome_orientando}`,
+    `**Curso:** ${o.curso}`,
+  ]
+  if (o.titulo_provisorio) lines.push(`**Título Provisório:** ${o.titulo_provisorio}`)
+  lines.push(``, `---`, ``)
+  if (prazos.length === 0) {
+    lines.push(`_Nenhum prazo ou tarefa registrado._`)
+  } else {
+    prazos.forEach(r => {
+      const check = r.tarefa_cumprida ? '[x]' : '[ ]'
+      const dateStr = r.data ? ` *(${r.data})*` : ''
+      const imp = r.importante ? ' ⭐' : ''
+      lines.push(`- ${check}${imp} ${r.texto}${dateStr}`)
+    })
+  }
+  const blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `prazos-${o.nome_orientando.replace(/\s+/g, '-').toLowerCase()}.md`
+  document.body.appendChild(a); a.click(); document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+function downloadPrazosPNG(o: Orientacao) {
+  const prazos = (o.reunioes ?? []).filter(r => r.tarefa).sort((a, b) => {
+    if (a.data && b.data) return a.data.localeCompare(b.data)
+    if (a.data) return -1
+    if (b.data) return 1
+    return 0
+  })
+  const W = 640
+  const PAD = 32
+  const ITEM_GAP = 10
+  const lineH = 22
+  const FONT = '14px -apple-system, system-ui, sans-serif'
+  const MONO = '12px monospace'
+
+  // measure pass
+  const mc = document.createElement('canvas')
+  const mctx = mc.getContext('2d')!
+  mctx.font = FONT
+  const maxTextW = W - PAD * 2 - 28
+
+  function wrapText(text: string): string[] {
+    const words = text.split(' ')
+    const out: string[] = []
+    let line = ''
+    for (const w of words) {
+      const test = line ? `${line} ${w}` : w
+      if (mctx.measureText(test).width > maxTextW && line) { out.push(line); line = w }
+      else { line = test }
+    }
+    if (line) out.push(line)
+    return out.length ? out : ['']
+  }
+
+  const items = prazos.map(r => ({ r, lines: wrapText(r.texto) }))
+  const headerH = 92
+  let bodyH = items.length === 0 ? lineH + ITEM_GAP : 0
+  for (const it of items) bodyH += it.lines.length * lineH + ITEM_GAP + 10
+  const totalH = headerH + bodyH + PAD
+
+  const canvas = document.createElement('canvas')
+  canvas.width = W; canvas.height = totalH
+  const ctx = canvas.getContext('2d')!
+
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(0, 0, W, totalH)
+
+  // Header
+  ctx.fillStyle = '#111827'
+  ctx.font = `bold 17px -apple-system, system-ui, sans-serif`
+  ctx.fillText('Prazos e Tarefas', PAD, PAD + 20)
+  ctx.fillStyle = '#6b7280'
+  ctx.font = `13px -apple-system, system-ui, sans-serif`
+  ctx.fillText(`${o.nome_orientando}  ·  ${o.curso}`, PAD, PAD + 42)
+  ctx.fillStyle = '#9ca3af'
+  ctx.font = `11px -apple-system, system-ui, sans-serif`
+  ctx.fillText(new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' }), PAD, PAD + 62)
+  ctx.strokeStyle = '#e5e7eb'; ctx.lineWidth = 1
+  ctx.beginPath(); ctx.moveTo(PAD, headerH - 8); ctx.lineTo(W - PAD, headerH - 8); ctx.stroke()
+
+  let y = headerH + 8
+  if (items.length === 0) {
+    ctx.fillStyle = '#9ca3af'
+    ctx.font = `italic 13px -apple-system, system-ui, sans-serif`
+    ctx.fillText('Nenhum prazo ou tarefa registrado.', PAD, y + lineH)
+  } else {
+    for (const { r, lines } of items) {
+      const done = !!r.tarefa_cumprida
+      const important = !!r.importante
+      const cbY = y + 2
+
+      // checkbox
+      ctx.lineWidth = 1.5
+      ctx.strokeStyle = done ? '#d1d5db' : (important ? '#f59e0b' : '#3b82f6')
+      ctx.fillStyle = done ? '#f9fafb' : '#ffffff'
+      ctx.beginPath(); ctx.roundRect(PAD, cbY, 16, 16, 3); ctx.fill(); ctx.stroke()
+      if (done) {
+        ctx.strokeStyle = '#9ca3af'; ctx.lineWidth = 2
+        ctx.beginPath()
+        ctx.moveTo(PAD + 3, cbY + 8); ctx.lineTo(PAD + 7, cbY + 12); ctx.lineTo(PAD + 13, cbY + 3)
+        ctx.stroke()
+      }
+
+      // date pill
+      let textX = PAD + 24
+      if (r.data) {
+        ctx.font = MONO
+        const dW = ctx.measureText(r.data).width + 12
+        ctx.fillStyle = done ? '#f3f4f6' : '#eff6ff'
+        ctx.strokeStyle = done ? '#e5e7eb' : '#bfdbfe'; ctx.lineWidth = 1
+        ctx.beginPath(); ctx.roundRect(textX, cbY, dW, 16, 8); ctx.fill(); ctx.stroke()
+        ctx.fillStyle = done ? '#9ca3af' : '#3b82f6'
+        ctx.fillText(r.data, textX + 6, cbY + 12)
+        textX += dW + 8
+      }
+
+      // text
+      ctx.font = FONT
+      ctx.fillStyle = done ? '#9ca3af' : '#111827'
+      for (let li = 0; li < lines.length; li++) {
+        const lineY = y + li * lineH + 14
+        const lx = li === 0 ? textX : PAD + 24
+        ctx.fillText(lines[li], lx, lineY)
+        if (done) {
+          const tw = ctx.measureText(lines[li]).width
+          ctx.strokeStyle = '#9ca3af'; ctx.lineWidth = 1
+          ctx.beginPath(); ctx.moveTo(lx, lineY - 5); ctx.lineTo(lx + tw, lineY - 5); ctx.stroke()
+        }
+      }
+
+      // importante
+      if (important) {
+        ctx.font = `bold 11px -apple-system, system-ui, sans-serif`
+        ctx.fillStyle = '#d97706'
+        ctx.fillText('★', W - PAD - 12, y + 16)
+      }
+
+      y += lines.length * lineH + ITEM_GAP + 10
+    }
+  }
+
+  canvas.toBlob(blob => {
+    if (!blob) return
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `prazos-${o.nome_orientando.replace(/\s+/g, '-').toLowerCase()}.png`
+    document.body.appendChild(a); a.click(); document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }, 'image/png')
+}
+
 function exportPDF(orientacoes: Orientacao[]) {
   const doc = new jsPDF()
   doc.setFontSize(16)
@@ -1012,7 +1177,17 @@ export function OrientacoesPage() {
                                         </div>
                                         {/* ── Coluna Prazos ── */}
                                         <div className="border-t md:border-t-0 md:border-l border-gray-100 dark:border-gray-700 pt-4 md:pt-0 md:pl-6">
-                                          <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Prazos e Tarefas</h4>
+                                          <div className="flex items-center justify-between mb-2">
+                                            <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Prazos e Tarefas</h4>
+                                            <div className="flex items-center gap-1">
+                                              <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => downloadPrazosMarkdown(o)} disabled={prazList.length === 0}>
+                                                <Download className="w-3 h-3 mr-1" /> MD
+                                              </Button>
+                                              <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => downloadPrazosPNG(o)} disabled={prazList.length === 0}>
+                                                <Download className="w-3 h-3 mr-1" /> PNG
+                                              </Button>
+                                            </div>
+                                          </div>
                                           <div className="space-y-0">
                                             {prazList.length === 0
                                               ? <p className="text-xs text-gray-400 dark:text-gray-500 text-center py-4">Nenhum prazo ou tarefa</p>
