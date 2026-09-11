@@ -1123,7 +1123,7 @@ export function OrientacoesPage() {
                                                 {r.tarefa && (
                                                   <Checkbox
                                                     checked={!!r.tarefa_cumprida}
-                                                    onCheckedChange={e => { e && typeof e === 'object' && e.stopPropagation?.(); toggleTarefaCumprida(o.id, r.id) }}
+                                                    onCheckedChange={() => toggleTarefaCumprida(o.id, r.id)}
                                                     onClick={e => e.stopPropagation()}
                                                     className="w-3.5 h-3.5 flex-shrink-0"
                                                   />
