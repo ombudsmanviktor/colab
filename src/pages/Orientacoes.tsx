@@ -1198,7 +1198,7 @@ export function OrientacoesPage() {
                                       </div>
 
                                       {/* Add form */}
-                                      <div className="border border-gray-200 dark:border-gray-600 rounded-lg p-3 space-y-2 bg-gray-50 dark:bg-gray-800" onClick={e => e.stopPropagation()}>
+                                      <div className="border border-gray-200 dark:border-gray-600 rounded-xl p-3 space-y-2.5 bg-gray-50 dark:bg-gray-800" onClick={e => e.stopPropagation()}>
                                         <div className="flex items-center gap-2">
                                           <CalendarDays className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500 flex-shrink-0" />
                                           <Input type="date" value={activeReuniaoId === o.id ? novaReuniaoData : ''} onChange={e => { setActiveReuniaoId(o.id); setNovaReuniaoData(e.target.value) }} className="h-7 text-xs w-40" />
@@ -1210,27 +1210,50 @@ export function OrientacoesPage() {
                                           placeholder="Anotação da reunião ou descrição do prazo"
                                           rows={2} className="text-sm"
                                         />
-                                        <div className="flex items-center gap-2 flex-wrap">
+                                        <div className="flex items-center gap-3 flex-wrap">
+                                          {/* Toggle: Reunião ⟷ Tarefa */}
+                                          {(() => {
+                                            const isTarefa = activeReuniaoId === o.id ? novaReuniaoTarefa : false
+                                            return (
+                                              <button
+                                                type="button"
+                                                role="switch"
+                                                aria-checked={isTarefa}
+                                                onClick={() => { setActiveReuniaoId(o.id); setNovaReuniaoTarefa(!isTarefa) }}
+                                                className="flex items-center gap-0 rounded-full border border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-900 p-0.5 h-6 w-36 relative transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                                                title={isTarefa ? 'Prazo / Tarefa' : 'Anotação de Reunião'}
+                                              >
+                                                {/* Labels */}
+                                                <span className={`absolute left-2 text-[10px] font-medium transition-opacity select-none ${isTarefa ? 'opacity-40' : 'opacity-100 text-gray-600 dark:text-gray-300'}`}>Reunião</span>
+                                                <span className={`absolute right-2 text-[10px] font-medium transition-opacity select-none ${isTarefa ? 'opacity-100 text-amber-600 dark:text-amber-400' : 'opacity-40'}`}>Prazo</span>
+                                                {/* Thumb */}
+                                                <span className={`inline-block h-5 w-5 rounded-full shadow transition-all duration-200 flex-shrink-0 ${isTarefa ? 'translate-x-[5.5rem] bg-amber-400' : 'translate-x-0 bg-gray-400 dark:bg-gray-500'}`} />
+                                              </button>
+                                            )
+                                          })()}
+                                          {/* Importante checkbox */}
                                           <div className="flex items-center gap-1.5">
                                             <Checkbox id={`importante-${o.id}`} checked={activeReuniaoId === o.id ? novaReuniaoImportante : false} onCheckedChange={v => { setActiveReuniaoId(o.id); setNovaReuniaoImportante(Boolean(v)) }} />
                                             <label htmlFor={`importante-${o.id}`} className="text-xs text-gray-500 dark:text-gray-400 cursor-pointer select-none">Importante</label>
                                           </div>
-                                          <div className="flex items-center gap-1.5 flex-1">
-                                            <Checkbox id={`tarefa-${o.id}`} checked={activeReuniaoId === o.id ? novaReuniaoTarefa : false} onCheckedChange={v => { setActiveReuniaoId(o.id); setNovaReuniaoTarefa(Boolean(v)) }} />
-                                            <label htmlFor={`tarefa-${o.id}`} className="text-xs text-gray-500 dark:text-gray-400 cursor-pointer select-none">Tarefa ou Prazo Definido</label>
-                                          </div>
-                                          <button type="button" onClick={() => { setActiveReuniaoId(o.id); reuniaoFileRef.current?.click() }} className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 px-2 py-1 rounded border border-gray-200 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-400 transition-colors bg-white dark:bg-gray-900">
+                                          {/* Attach */}
+                                          <button type="button" onClick={() => { setActiveReuniaoId(o.id); reuniaoFileRef.current?.click() }} className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 px-2 py-1 rounded-lg border border-gray-200 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-400 transition-colors bg-white dark:bg-gray-900 ml-auto">
                                             <Paperclip className="w-3.5 h-3.5" />
-                                            {activeReuniaoId === o.id && novaReuniaoFile ? novaReuniaoFile.name : 'Anexar arquivo'}
+                                            {activeReuniaoId === o.id && novaReuniaoFile ? novaReuniaoFile.name : 'Anexar'}
                                           </button>
                                           {activeReuniaoId === o.id && novaReuniaoFile && (
                                             <button onClick={() => setNovaReuniaoFile(null)} className="text-gray-400 dark:text-gray-500 hover:text-red-500 transition-colors"><X className="w-3.5 h-3.5" /></button>
                                           )}
                                         </div>
                                         <div className="flex justify-end">
-                                          <Button size="sm" variant="outline" onClick={() => { setActiveReuniaoId(o.id); addReuniao(o.id) }} disabled={!(activeReuniaoId === o.id && novaReuniaoTexto.trim())}>
+                                          <button
+                                            type="button"
+                                            onClick={() => { setActiveReuniaoId(o.id); addReuniao(o.id) }}
+                                            disabled={!(activeReuniaoId === o.id && novaReuniaoTexto.trim())}
+                                            className="flex items-center gap-1.5 text-sm font-medium px-4 py-1.5 rounded-full bg-amber-400 hover:bg-amber-500 text-amber-950 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"
+                                          >
                                             <Plus className="w-3.5 h-3.5" /> Adicionar
-                                          </Button>
+                                          </button>
                                         </div>
                                       </div>
                                     </>
