@@ -1120,17 +1120,19 @@ export function OrientacoesPage() {
                                           ) : (
                                             <>
                                               <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                                                {r.tarefa && (
+                                                  <Checkbox
+                                                    checked={!!r.tarefa_cumprida}
+                                                    onCheckedChange={e => { e && typeof e === 'object' && e.stopPropagation?.(); toggleTarefaCumprida(o.id, r.id) }}
+                                                    onClick={e => e.stopPropagation()}
+                                                    className="w-3.5 h-3.5 flex-shrink-0"
+                                                  />
+                                                )}
                                                 {r.data
                                                   ? <><CalendarDays className="w-3 h-3 text-gray-400 dark:text-gray-500" /><span className={`text-xs font-medium ${isPast ? 'text-gray-400 dark:text-gray-500' : 'text-gray-500 dark:text-gray-400'}`}>{r.data}</span></>
                                                   : <span className="text-xs text-gray-400 dark:text-gray-500 italic">Sem data</span>
                                                 }
                                                 {r.importante && <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">Importante</span>}
-                                                {r.tarefa && (
-                                                  <button onClick={e => { e.stopPropagation(); toggleTarefaCumprida(o.id, r.id) }} className="flex items-center gap-1 text-xs font-medium px-1.5 py-0.5 rounded transition-colors">
-                                                    <Checkbox checked={!!r.tarefa_cumprida} onCheckedChange={() => toggleTarefaCumprida(o.id, r.id)} className="w-3 h-3" />
-                                                    <span className={done ? 'text-gray-400 dark:text-gray-500' : 'text-blue-600 dark:text-blue-400'}>{done ? 'Prazo Cumprido' : 'Prazo A Cumprir'}</span>
-                                                  </button>
-                                                )}
                                               </div>
                                               <p className={`text-sm whitespace-pre-wrap ${done ? 'text-gray-400 dark:text-gray-500 line-through' : 'text-gray-700 dark:text-gray-200'}`}>{r.texto}</p>
                                             </>
