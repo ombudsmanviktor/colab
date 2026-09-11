@@ -1245,15 +1245,19 @@ export function OrientacoesPage() {
                                           )}
                                         </div>
                                         <div className="flex justify-end">
-                                          <button
-                                            type="button"
-                                            onClick={() => { setActiveReuniaoId(o.id); addReuniao(o.id) }}
-                                            disabled={!(activeReuniaoId === o.id && novaReuniaoTexto.trim())}
-                                            className="flex items-center gap-1.5 text-sm font-medium px-4 py-1.5 rounded-full disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"
-                                            style={{ backgroundColor: '#FFB351', color: '#4a2800' }}
-                                          >
-                                            <Plus className="w-3.5 h-3.5" /> Adicionar
-                                          </button>
+                                          {(() => {
+                                            const canAdd = activeReuniaoId === o.id && !!novaReuniaoTexto.trim()
+                                            return (
+                                              <button
+                                                type="button"
+                                                onClick={() => { if (!canAdd) return; setActiveReuniaoId(o.id); addReuniao(o.id) }}
+                                                className={`flex items-center gap-1.5 text-sm font-medium px-4 py-1.5 rounded-full shadow-sm transition-opacity ${canAdd ? 'opacity-100 cursor-pointer' : 'opacity-40 cursor-not-allowed'}`}
+                                                style={{ backgroundColor: '#FFB351', color: '#4a2800' }}
+                                              >
+                                                <Plus className="w-3.5 h-3.5" /> Adicionar
+                                              </button>
+                                            )
+                                          })()}
                                         </div>
                                       </div>
                                     </>
