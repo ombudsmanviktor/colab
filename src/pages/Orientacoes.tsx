@@ -258,8 +258,8 @@ export function OrientacoesPage() {
   const [novaLeitura, setNovaLeitura] = useState('')
   const [activeLeituraId, setActiveLeituraId] = useState<string | null>(null)
 
-  const [novaLink, setNovaLink] = useState('')
-  const [activeLinkId, setActiveLinkId] = useState<string | null>(null)
+  const [formLinks, setFormLinks] = useState<string[]>([])
+  const [formLinkInput, setFormLinkInput] = useState('')
 
   // D&D state for leitura documents
   const [isDraggingDoc, setIsDraggingDoc] = useState(false)
@@ -354,11 +354,15 @@ export function OrientacoesPage() {
     setForm(emptyForm)
     setPendingProjetoOriginal(null)
     setPendingProjetoFile(null)
+    setFormLinks([])
+    setFormLinkInput('')
     setShowForm(true)
   }
 
   function openEdit(o: Orientacao) {
     setEditing(o)
+    setFormLinks(o.links_documentos ?? [])
+    setFormLinkInput('')
     setForm({
       nome_orientando: o.nome_orientando,
       curso: o.curso,
@@ -391,7 +395,7 @@ export function OrientacoesPage() {
       data_defesa_tcc: form.data_defesa_tcc || undefined,
       leituras: editing?.leituras ?? [],
       leituras_docs: editing?.leituras_docs ?? [],
-      links_documentos: editing?.links_documentos ?? [],
+      links_documentos: formLinks,
       projeto_original,
     }
 
@@ -672,29 +676,6 @@ export function OrientacoesPage() {
 
   /* ── Links ── */
 
-  function addLink(orientacaoId: string) {
-    if (!novaLink.trim()) return
-    const updatedOrientacoes = orientacoes.map(o =>
-      o.id !== orientacaoId ? o
-        : { ...o, links_documentos: [...(o.links_documentos ?? []), novaLink.trim()], updated_at: new Date().toISOString() }
-    )
-    setOrientacoes(updatedOrientacoes)
-    setNovaLink('')
-    setActiveLinkId(null)
-    const updatedO = updatedOrientacoes.find(o => o.id === orientacaoId)!
-    saveOrientacaoFile(updatedO).catch(() => {})
-  }
-
-  function deleteLink(orientacaoId: string, idx: number) {
-    const updatedOrientacoes = orientacoes.map(o =>
-      o.id !== orientacaoId ? o
-        : { ...o, links_documentos: (o.links_documentos ?? []).filter((_, i) => i !== idx), updated_at: new Date().toISOString() }
-    )
-    setOrientacoes(updatedOrientacoes)
-    const updatedO = updatedOrientacoes.find(o => o.id === orientacaoId)!
-    saveOrientacaoFile(updatedO).catch(() => {})
-  }
-
   /* ── File pickers ── */
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
@@ -911,6 +892,20 @@ export function OrientacoesPage() {
                         {/* Expanded tabs */}
                         {isOpen && (
                           <div className="border-t border-gray-100 dark:border-gray-700 px-6 py-4">
+                            {/* Documento de Trabalho — links inline */}
+                            {(o.links_documentos ?? []).length > 0 && (
+                              <div className="mb-4 flex items-center gap-2 flex-wrap">
+                                <span className="text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wider shrink-0">Documento de Trabalho:</span>
+                                {(o.links_documentos ?? []).map((link, i) => (
+                                  <a key={i} href={link} target="_blank" rel="noreferrer"
+                                    className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded-full"
+                                  >
+                                    <Link2 className="w-3 h-3 flex-shrink-0" />
+                                    <span className="truncate max-w-[200px]">{link.replace(/^https?:\/\//, '')}</span>
+                                  </a>
+                                ))}
+                              </div>
+                            )}
                             <Tabs
                               value={currentSubTab}
                               onValueChange={v => setActiveSubTab(prev => ({ ...prev, [o.id]: v }))}
@@ -920,194 +915,152 @@ export function OrientacoesPage() {
                                 <TabsTrigger value="leituras">
                                   Leituras ({(o.leituras ?? []).length + leiturasDocs.length})
                                 </TabsTrigger>
-                                <TabsTrigger value="links">Links ({(o.links_documentos ?? []).length})</TabsTrigger>
                                 {o.projeto_original && <TabsTrigger value="projeto">Projeto</TabsTrigger>}
                               </TabsList>
 
                               {/* ── Reuniões ── */}
                               <TabsContent value="reunioes">
-                                <div className="flex justify-end mb-3">
-                                  <Button variant="outline" size="sm" onClick={() => downloadNotasMarkdown(o)} disabled={reunioes.length === 0}>
-                                    <Download className="w-3.5 h-3.5" /> Baixar Markdown
-                                  </Button>
-                                </div>
-                                <div className="space-y-0 mb-4">
-                                  {sortedReunioes.length === 0 && (
-                                    <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-4">Nenhuma anotação registrada</p>
-                                  )}
-                                  {sortedReunioes.map((r, idx) => {
-                                    const isPast = r.data ? r.data < new Date().toISOString().slice(0, 10) : false
+                                {/* helper to render one timeline item */}
+                                {(() => {
+                                  const today = new Date().toISOString().slice(0, 10)
+                                  const renderItem = (r: typeof sortedReunioes[0], idx: number, list: typeof sortedReunioes) => {
+                                    const isPast = r.data ? r.data < today : false
                                     const done = r.tarefa && r.tarefa_cumprida
                                     const dotColor = (isPast || done) ? 'text-gray-400 fill-gray-400' : 'text-amber-400 fill-amber-400'
                                     const dotBg = (isPast || done) ? 'bg-gray-300 dark:bg-gray-600' : 'bg-amber-400'
                                     return (
-                                    <div key={r.id} className={`flex gap-3 group transition-opacity ${done ? 'opacity-50' : ''}`}>
-                                      <div className="flex flex-col items-center pt-1.5 flex-shrink-0">
-                                        {r.importante
-                                          ? <Star className={`w-3.5 h-3.5 flex-shrink-0 ${dotColor}`} />
-                                          : <div className={`w-2 h-2 rounded-full flex-shrink-0 mt-0.5 ${dotBg}`} />
-                                        }
-                                        {idx < sortedReunioes.length - 1 && (
-                                          <div className="w-px flex-1 bg-gray-200 dark:bg-gray-700 my-1" style={{ minHeight: 24 }} />
-                                        )}
-                                      </div>
-                                      <div className="flex-1 pb-4">
-                                        {editingReuniaoId === r.id ? (
-                                          <div className="space-y-1.5">
-                                            <div className="flex items-center gap-2">
-                                              <CalendarDays className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500 flex-shrink-0" />
-                                              <Input
-                                                type="date"
-                                                value={editingReuniaoData}
-                                                onChange={e => setEditingReuniaoData(e.target.value)}
-                                                className="h-7 text-xs w-40"
-                                              />
-                                              <span className="text-xs text-gray-400 dark:text-gray-500">data opcional</span>
+                                      <div key={r.id} className={`flex gap-3 group transition-opacity ${done ? 'opacity-50' : ''}`}>
+                                        <div className="flex flex-col items-center pt-1.5 flex-shrink-0">
+                                          {r.importante
+                                            ? <Star className={`w-3.5 h-3.5 flex-shrink-0 ${dotColor}`} />
+                                            : <div className={`w-2 h-2 rounded-full flex-shrink-0 mt-0.5 ${dotBg}`} />
+                                          }
+                                          {idx < list.length - 1 && (
+                                            <div className="w-px flex-1 bg-gray-200 dark:bg-gray-700 my-1" style={{ minHeight: 24 }} />
+                                          )}
+                                        </div>
+                                        <div className="flex-1 pb-4 min-w-0">
+                                          {editingReuniaoId === r.id ? (
+                                            <div className="space-y-1.5">
+                                              <div className="flex items-center gap-2">
+                                                <CalendarDays className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500 flex-shrink-0" />
+                                                <Input type="date" value={editingReuniaoData} onChange={e => setEditingReuniaoData(e.target.value)} className="h-7 text-xs w-36" />
+                                              </div>
+                                              <Textarea value={editingReuniaoTexto} onChange={e => setEditingReuniaoTexto(e.target.value)} rows={2} className="text-sm" autoFocus />
+                                              <div className="flex gap-1.5">
+                                                <Button size="sm" variant="outline" className="h-6 text-xs px-2" onClick={() => { updateReuniao(o.id, r.id, editingReuniaoTexto, editingReuniaoData); setEditingReuniaoId(null) }}>Salvar</Button>
+                                                <Button size="sm" variant="ghost" className="h-6 text-xs px-2" onClick={() => setEditingReuniaoId(null)}>Cancelar</Button>
+                                              </div>
                                             </div>
-                                            <Textarea
-                                              value={editingReuniaoTexto}
-                                              onChange={e => setEditingReuniaoTexto(e.target.value)}
-                                              rows={2}
-                                              className="text-sm"
-                                              autoFocus
-                                            />
-                                            <div className="flex gap-1.5">
-                                              <Button size="sm" variant="outline" className="h-6 text-xs px-2" onClick={() => { updateReuniao(o.id, r.id, editingReuniaoTexto, editingReuniaoData); setEditingReuniaoId(null) }}>
-                                                Salvar
-                                              </Button>
-                                              <Button size="sm" variant="ghost" className="h-6 text-xs px-2" onClick={() => setEditingReuniaoId(null)}>
-                                                Cancelar
-                                              </Button>
-                                            </div>
-                                          </div>
-                                        ) : (
-                                          <>
-                                            {r.data ? (
+                                          ) : (
+                                            <>
                                               <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-                                                <CalendarDays className="w-3 h-3 text-gray-400 dark:text-gray-500" />
-                                                <span className={`text-xs font-medium ${isPast ? 'text-gray-400 dark:text-gray-500' : 'text-gray-500 dark:text-gray-400'}`}>{r.data}</span>
+                                                {r.data
+                                                  ? <><CalendarDays className="w-3 h-3 text-gray-400 dark:text-gray-500" /><span className={`text-xs font-medium ${isPast ? 'text-gray-400 dark:text-gray-500' : 'text-gray-500 dark:text-gray-400'}`}>{r.data}</span></>
+                                                  : <span className="text-xs text-gray-400 dark:text-gray-500 italic">Sem data</span>
+                                                }
                                                 {r.importante && <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">Importante</span>}
                                                 {r.tarefa && (
-                                                  <button
-                                                    onClick={e => { e.stopPropagation(); toggleTarefaCumprida(o.id, r.id) }}
-                                                    className="flex items-center gap-1 text-xs font-medium px-1.5 py-0.5 rounded transition-colors"
-                                                  >
+                                                  <button onClick={e => { e.stopPropagation(); toggleTarefaCumprida(o.id, r.id) }} className="flex items-center gap-1 text-xs font-medium px-1.5 py-0.5 rounded transition-colors">
                                                     <Checkbox checked={!!r.tarefa_cumprida} onCheckedChange={() => toggleTarefaCumprida(o.id, r.id)} className="w-3 h-3" />
-                                                    <span className={done ? 'text-gray-400 dark:text-gray-500' : 'text-blue-600 dark:text-blue-400'}>
-                                                      {done ? 'Prazo Cumprido' : 'Prazo A Cumprir'}
-                                                    </span>
+                                                    <span className={done ? 'text-gray-400 dark:text-gray-500' : 'text-blue-600 dark:text-blue-400'}>{done ? 'Prazo Cumprido' : 'Prazo A Cumprir'}</span>
                                                   </button>
                                                 )}
                                               </div>
-                                            ) : (
-                                              <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-                                                <span className="text-xs text-gray-400 dark:text-gray-500 italic">Sem data</span>
-                                                {r.importante && <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">Importante</span>}
-                                                {r.tarefa && (
-                                                  <button
-                                                    onClick={e => { e.stopPropagation(); toggleTarefaCumprida(o.id, r.id) }}
-                                                    className="flex items-center gap-1 text-xs font-medium px-1.5 py-0.5 rounded transition-colors"
-                                                  >
-                                                    <Checkbox checked={!!r.tarefa_cumprida} onCheckedChange={() => toggleTarefaCumprida(o.id, r.id)} className="w-3 h-3" />
-                                                    <span className={done ? 'text-gray-400 dark:text-gray-500' : 'text-blue-600 dark:text-blue-400'}>
-                                                      {done ? 'Prazo Cumprido' : 'Prazo A Cumprir'}
-                                                    </span>
-                                                  </button>
-                                                )}
-                                              </div>
-                                            )}
-                                            <p className={`text-sm whitespace-pre-wrap ${done ? 'text-gray-400 dark:text-gray-500 line-through' : 'text-gray-700 dark:text-gray-200'}`}>{r.texto}</p>
-                                          </>
-                                        )}
-                                        {r.anexo && (
-                                          <div className="mt-2 flex items-center gap-2">
-                                            <a
-                                              href={r.anexo.url}
-                                              target="_blank"
-                                              rel="noreferrer"
-                                              className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 px-2 py-1 rounded-md transition-colors"
-                                            >
-                                              <Paperclip className="w-3 h-3 flex-shrink-0" />
-                                              <span className="truncate max-w-[200px]">{r.anexo.name}</span>
-                                              <span className="text-gray-400 dark:text-gray-500 ml-0.5">({formatFileSize(r.anexo.size)})</span>
-                                            </a>
-                                            <button onClick={() => deleteReuniaoAnexo(o.id, r.id)} className="text-gray-300 dark:text-gray-600 hover:text-red-500 transition-colors" title="Remover anexo">
-                                              <X className="w-3 h-3" />
-                                            </button>
-                                          </div>
-                                        )}
+                                              <p className={`text-sm whitespace-pre-wrap ${done ? 'text-gray-400 dark:text-gray-500 line-through' : 'text-gray-700 dark:text-gray-200'}`}>{r.texto}</p>
+                                            </>
+                                          )}
+                                          {r.anexo && (
+                                            <div className="mt-2 flex items-center gap-2">
+                                              <a href={r.anexo.url} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 px-2 py-1 rounded-md transition-colors">
+                                                <Paperclip className="w-3 h-3 flex-shrink-0" />
+                                                <span className="truncate max-w-[140px]">{r.anexo.name}</span>
+                                              </a>
+                                              <button onClick={() => deleteReuniaoAnexo(o.id, r.id)} className="text-gray-300 dark:text-gray-600 hover:text-red-500 transition-colors" title="Remover anexo"><X className="w-3 h-3" /></button>
+                                            </div>
+                                          )}
+                                        </div>
+                                        <div className="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 mt-0.5">
+                                          <button onClick={() => { setEditingReuniaoId(r.id); setEditingReuniaoTexto(r.texto); setEditingReuniaoData(r.data ?? '') }} className="p-1 text-gray-300 dark:text-gray-600 hover:text-blue-500" title="Editar"><Pencil className="w-3 h-3" /></button>
+                                          <button onClick={() => deleteReuniao(o.id, r.id)} className="p-1 text-gray-300 dark:text-gray-600 hover:text-red-500" title="Remover"><X className="w-3.5 h-3.5" /></button>
+                                        </div>
                                       </div>
-                                      <div className="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 mt-0.5">
-                                        <button onClick={() => { setEditingReuniaoId(r.id); setEditingReuniaoTexto(r.texto); setEditingReuniaoData(r.data ?? '') }} className="p-1 text-gray-300 dark:text-gray-600 hover:text-blue-500" title="Editar">
-                                          <Pencil className="w-3 h-3" />
-                                        </button>
-                                        <button onClick={() => deleteReuniao(o.id, r.id)} className="p-1 text-gray-300 dark:text-gray-600 hover:text-red-500" title="Remover">
-                                          <X className="w-3.5 h-3.5" />
-                                        </button>
-                                      </div>
-                                    </div>
                                     )
-                                  })}
-                                </div>
-                                <div className="border border-gray-200 dark:border-gray-600 rounded-lg p-3 space-y-2 bg-gray-50 dark:bg-gray-800" onClick={e => e.stopPropagation()}>
-                                  <div className="flex items-center gap-2">
-                                    <CalendarDays className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500 flex-shrink-0" />
-                                    <Input
-                                      type="date"
-                                      value={activeReuniaoId === o.id ? novaReuniaoData : ''}
-                                      onChange={e => { setActiveReuniaoId(o.id); setNovaReuniaoData(e.target.value) }}
-                                      className="h-7 text-xs w-40"
-                                    />
-                                    <span className="text-xs text-gray-400 dark:text-gray-500">data opcional</span>
-                                  </div>
-                                  <Textarea
-                                    value={activeReuniaoId === o.id ? novaReuniaoTexto : ''}
-                                    onChange={e => { setActiveReuniaoId(o.id); setNovaReuniaoTexto(e.target.value) }}
-                                    placeholder="Anotação da reunião ou descrição do prazo"
-                                    rows={2}
-                                    className="text-sm"
-                                  />
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    <div className="flex items-center gap-1.5">
-                                      <Checkbox
-                                        id={`importante-${o.id}`}
-                                        checked={activeReuniaoId === o.id ? novaReuniaoImportante : false}
-                                        onCheckedChange={v => { setActiveReuniaoId(o.id); setNovaReuniaoImportante(Boolean(v)) }}
-                                      />
-                                      <label htmlFor={`importante-${o.id}`} className="text-xs text-gray-500 dark:text-gray-400 cursor-pointer select-none">Importante</label>
-                                    </div>
-                                    <div className="flex items-center gap-1.5 flex-1">
-                                      <Checkbox
-                                        id={`tarefa-${o.id}`}
-                                        checked={activeReuniaoId === o.id ? novaReuniaoTarefa : false}
-                                        onCheckedChange={v => { setActiveReuniaoId(o.id); setNovaReuniaoTarefa(Boolean(v)) }}
-                                      />
-                                      <label htmlFor={`tarefa-${o.id}`} className="text-xs text-gray-500 dark:text-gray-400 cursor-pointer select-none">Tarefa ou Prazo Definido</label>
-                                    </div>
-                                    <button
-                                      type="button"
-                                      onClick={() => { setActiveReuniaoId(o.id); reuniaoFileRef.current?.click() }}
-                                      className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 px-2 py-1 rounded border border-gray-200 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-400 transition-colors bg-white dark:bg-gray-900"
-                                    >
-                                      <Paperclip className="w-3.5 h-3.5" />
-                                      {activeReuniaoId === o.id && novaReuniaoFile ? novaReuniaoFile.name : 'Anexar arquivo'}
-                                    </button>
-                                    {activeReuniaoId === o.id && novaReuniaoFile && (
-                                      <button onClick={() => setNovaReuniaoFile(null)} className="text-gray-400 dark:text-gray-500 hover:text-red-500 transition-colors">
-                                        <X className="w-3.5 h-3.5" />
-                                      </button>
-                                    )}
-                                  </div>
-                                  <div className="flex justify-end">
-                                    <Button
-                                      size="sm" variant="outline"
-                                      onClick={() => { setActiveReuniaoId(o.id); addReuniao(o.id) }}
-                                      disabled={!(activeReuniaoId === o.id && novaReuniaoTexto.trim())}
-                                    >
-                                      <Plus className="w-3.5 h-3.5" /> Adicionar
-                                    </Button>
-                                  </div>
-                                </div>
+                                  }
+
+                                  const notasList = sortedReunioes.filter(r => !r.tarefa)
+                                  const prazList  = sortedReunioes.filter(r => !!r.tarefa)
+
+                                  return (
+                                    <>
+                                      {/* Two-column layout */}
+                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 mb-4">
+                                        {/* ── Coluna Reuniões ── */}
+                                        <div>
+                                          <div className="flex items-center justify-between mb-2">
+                                            <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Reuniões</h4>
+                                            <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => downloadNotasMarkdown(o)} disabled={reunioes.length === 0}>
+                                              <Download className="w-3 h-3 mr-1" /> MD
+                                            </Button>
+                                          </div>
+                                          <div className="space-y-0">
+                                            {notasList.length === 0
+                                              ? <p className="text-xs text-gray-400 dark:text-gray-500 text-center py-4">Nenhuma reunião registrada</p>
+                                              : notasList.map((r, idx) => renderItem(r, idx, notasList))
+                                            }
+                                          </div>
+                                        </div>
+                                        {/* ── Coluna Prazos ── */}
+                                        <div className="border-t md:border-t-0 md:border-l border-gray-100 dark:border-gray-700 pt-4 md:pt-0 md:pl-6">
+                                          <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Prazos e Tarefas</h4>
+                                          <div className="space-y-0">
+                                            {prazList.length === 0
+                                              ? <p className="text-xs text-gray-400 dark:text-gray-500 text-center py-4">Nenhum prazo ou tarefa</p>
+                                              : prazList.map((r, idx) => renderItem(r, idx, prazList))
+                                            }
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      {/* Add form */}
+                                      <div className="border border-gray-200 dark:border-gray-600 rounded-lg p-3 space-y-2 bg-gray-50 dark:bg-gray-800" onClick={e => e.stopPropagation()}>
+                                        <div className="flex items-center gap-2">
+                                          <CalendarDays className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500 flex-shrink-0" />
+                                          <Input type="date" value={activeReuniaoId === o.id ? novaReuniaoData : ''} onChange={e => { setActiveReuniaoId(o.id); setNovaReuniaoData(e.target.value) }} className="h-7 text-xs w-40" />
+                                          <span className="text-xs text-gray-400 dark:text-gray-500">data opcional</span>
+                                        </div>
+                                        <Textarea
+                                          value={activeReuniaoId === o.id ? novaReuniaoTexto : ''}
+                                          onChange={e => { setActiveReuniaoId(o.id); setNovaReuniaoTexto(e.target.value) }}
+                                          placeholder="Anotação da reunião ou descrição do prazo"
+                                          rows={2} className="text-sm"
+                                        />
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <div className="flex items-center gap-1.5">
+                                            <Checkbox id={`importante-${o.id}`} checked={activeReuniaoId === o.id ? novaReuniaoImportante : false} onCheckedChange={v => { setActiveReuniaoId(o.id); setNovaReuniaoImportante(Boolean(v)) }} />
+                                            <label htmlFor={`importante-${o.id}`} className="text-xs text-gray-500 dark:text-gray-400 cursor-pointer select-none">Importante</label>
+                                          </div>
+                                          <div className="flex items-center gap-1.5 flex-1">
+                                            <Checkbox id={`tarefa-${o.id}`} checked={activeReuniaoId === o.id ? novaReuniaoTarefa : false} onCheckedChange={v => { setActiveReuniaoId(o.id); setNovaReuniaoTarefa(Boolean(v)) }} />
+                                            <label htmlFor={`tarefa-${o.id}`} className="text-xs text-gray-500 dark:text-gray-400 cursor-pointer select-none">Tarefa ou Prazo Definido</label>
+                                          </div>
+                                          <button type="button" onClick={() => { setActiveReuniaoId(o.id); reuniaoFileRef.current?.click() }} className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 px-2 py-1 rounded border border-gray-200 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-400 transition-colors bg-white dark:bg-gray-900">
+                                            <Paperclip className="w-3.5 h-3.5" />
+                                            {activeReuniaoId === o.id && novaReuniaoFile ? novaReuniaoFile.name : 'Anexar arquivo'}
+                                          </button>
+                                          {activeReuniaoId === o.id && novaReuniaoFile && (
+                                            <button onClick={() => setNovaReuniaoFile(null)} className="text-gray-400 dark:text-gray-500 hover:text-red-500 transition-colors"><X className="w-3.5 h-3.5" /></button>
+                                          )}
+                                        </div>
+                                        <div className="flex justify-end">
+                                          <Button size="sm" variant="outline" onClick={() => { setActiveReuniaoId(o.id); addReuniao(o.id) }} disabled={!(activeReuniaoId === o.id && novaReuniaoTexto.trim())}>
+                                            <Plus className="w-3.5 h-3.5" /> Adicionar
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    </>
+                                  )
+                                })()}
                               </TabsContent>
 
                               {/* ── Leituras ── */}
@@ -1195,36 +1148,6 @@ export function OrientacoesPage() {
                                       Arraste um documento aqui para anexar como leitura
                                     </p>
                                   )}
-                                </div>
-                              </TabsContent>
-
-                              {/* ── Links ── */}
-                              <TabsContent value="links">
-                                <div className="space-y-1.5 mb-3">
-                                  {(o.links_documentos ?? []).map((link, i) => (
-                                    <div key={i} className="flex items-center gap-2 p-2 rounded-lg bg-gray-50 dark:bg-gray-800 group">
-                                      <Link2 className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
-                                      <a href={link} target="_blank" rel="noreferrer" className="text-sm text-blue-600 truncate flex-1 hover:underline">{link}</a>
-                                      <button onClick={() => deleteLink(o.id, i)} className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-gray-300 dark:text-gray-600 hover:text-red-500 flex-shrink-0">
-                                        <X className="w-3 h-3" />
-                                      </button>
-                                    </div>
-                                  ))}
-                                  {(o.links_documentos ?? []).length === 0 && (
-                                    <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-2">Nenhum link cadastrado</p>
-                                  )}
-                                </div>
-                                <div className="flex gap-2" onClick={e => e.stopPropagation()}>
-                                  <Input
-                                    value={activeLinkId === o.id ? novaLink : ''}
-                                    onChange={e => { setActiveLinkId(o.id); setNovaLink(e.target.value) }}
-                                    onKeyDown={e => { if (e.key === 'Enter') addLink(o.id) }}
-                                    placeholder="https://... (Enter para adicionar)"
-                                    className="flex-1"
-                                  />
-                                  <Button size="sm" variant="outline" onClick={() => { setActiveLinkId(o.id); addLink(o.id) }}>
-                                    <Plus className="w-4 h-4" />
-                                  </Button>
                                 </div>
                               </TabsContent>
 
@@ -1400,6 +1323,43 @@ export function OrientacoesPage() {
                     <span className="text-sm text-gray-500 dark:text-gray-400 italic">Atual: {editing.projeto_original.name}</span>
                   )}
                 </div>
+              </div>
+              <div className="col-span-2 space-y-1.5">
+                <Label>Documento de Trabalho</Label>
+                <div className="flex gap-2">
+                  <Input
+                    value={formLinkInput}
+                    onChange={e => setFormLinkInput(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        const v = formLinkInput.trim()
+                        if (v) { setFormLinks(prev => [...prev, v]); setFormLinkInput('') }
+                      }
+                    }}
+                    placeholder="https://..."
+                    className="flex-1"
+                  />
+                  <Button type="button" variant="outline" size="sm" onClick={() => {
+                    const v = formLinkInput.trim()
+                    if (v) { setFormLinks(prev => [...prev, v]); setFormLinkInput('') }
+                  }}>
+                    <Plus className="w-4 h-4" />
+                  </Button>
+                </div>
+                {formLinks.length > 0 && (
+                  <div className="space-y-1 mt-1">
+                    {formLinks.map((link, i) => (
+                      <div key={i} className="flex items-center gap-2 p-1.5 rounded-md bg-gray-50 dark:bg-gray-800 group">
+                        <Link2 className="w-3 h-3 text-blue-400 flex-shrink-0" />
+                        <span className="text-xs text-blue-600 dark:text-blue-400 truncate flex-1">{link.replace(/^https?:\/\//, '')}</span>
+                        <button type="button" onClick={() => setFormLinks(prev => prev.filter((_, j) => j !== i))} className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-300 dark:text-gray-600 hover:text-red-500">
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
               {needsQualificacao(form.curso) && (
                 <div className="col-span-2 flex items-center gap-2.5">
