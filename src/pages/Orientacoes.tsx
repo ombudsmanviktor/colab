@@ -1250,7 +1250,8 @@ export function OrientacoesPage() {
                                             type="button"
                                             onClick={() => { setActiveReuniaoId(o.id); addReuniao(o.id) }}
                                             disabled={!(activeReuniaoId === o.id && novaReuniaoTexto.trim())}
-                                            className="flex items-center gap-1.5 text-sm font-medium px-4 py-1.5 rounded-full bg-amber-400 hover:bg-amber-500 text-amber-950 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"
+                                            className="flex items-center gap-1.5 text-sm font-medium px-4 py-1.5 rounded-full disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"
+                                            style={{ backgroundColor: '#FFB351', color: '#4a2800' }}
                                           >
                                             <Plus className="w-3.5 h-3.5" /> Adicionar
                                           </button>
