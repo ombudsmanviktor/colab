@@ -72,6 +72,18 @@ function downloadNotasMarkdown(o: Orientacao) {
   URL.revokeObjectURL(url)
 }
 
+function wrapTextCanvas(ctx: CanvasRenderingContext2D, text: string, maxW: number): string[] {
+  const words = text.split(' ')
+  const lines: string[] = []; let line = ''
+  for (const word of words) {
+    const test = line ? `${line} ${word}` : word
+    if (ctx.measureText(test).width > maxW && line) { lines.push(line); line = word }
+    else line = test
+  }
+  if (line) lines.push(line)
+  return lines.length ? lines : ['']
+}
+
 function downloadPrazosMarkdown(o: Orientacao) {
   const prazos = (o.reunioes ?? []).filter(r => r.tarefa).sort((a, b) => {
     if (a.data && b.data) return a.data.localeCompare(b.data)
@@ -113,118 +125,127 @@ function downloadPrazosPNG(o: Orientacao) {
     if (b.data) return 1
     return 0
   })
-  const W = 640
-  const PAD = 32
-  const ITEM_GAP = 10
-  const lineH = 22
-  const FONT = '14px -apple-system, system-ui, sans-serif'
-  const MONO = '12px monospace'
 
-  // measure pass
-  const mc = document.createElement('canvas')
-  const mctx = mc.getContext('2d')!
-  mctx.font = FONT
-  const maxTextW = W - PAD * 2 - 28
-
-  function wrapText(text: string): string[] {
-    const words = text.split(' ')
-    const out: string[] = []
-    let line = ''
-    for (const w of words) {
-      const test = line ? `${line} ${w}` : w
-      if (mctx.measureText(test).width > maxTextW && line) { out.push(line); line = w }
-      else { line = test }
-    }
-    if (line) out.push(line)
-    return out.length ? out : ['']
-  }
-
-  const items = prazos.map(r => ({ r, lines: wrapText(r.texto) }))
-  const headerH = 92
-  let bodyH = items.length === 0 ? lineH + ITEM_GAP : 0
-  for (const it of items) bodyH += it.lines.length * lineH + ITEM_GAP + 10
-  const totalH = headerH + bodyH + PAD
-
+  const S = 1600
   const canvas = document.createElement('canvas')
-  canvas.width = W; canvas.height = totalH
+  canvas.width = S; canvas.height = S
   const ctx = canvas.getContext('2d')!
+  const pad = 72, r = 36
 
+  // ── Background gradient ──
+  const bg = ctx.createLinearGradient(0, 0, 0, S)
+  bg.addColorStop(0, '#fffbeb'); bg.addColorStop(1, '#fde68a')
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, S, S)
+
+  // ── White card with shadow ──
+  ctx.shadowColor = 'rgba(217,119,6,0.18)'; ctx.shadowBlur = 64; ctx.shadowOffsetY = 16
   ctx.fillStyle = '#ffffff'
-  ctx.fillRect(0, 0, W, totalH)
+  ctx.beginPath(); ctx.roundRect(pad, pad, S - pad * 2, S - pad * 2, r); ctx.fill()
+  ctx.shadowColor = 'transparent'
 
-  // Header
-  ctx.fillStyle = '#111827'
-  ctx.font = `bold 17px -apple-system, system-ui, sans-serif`
-  ctx.fillText('Prazos e Tarefas', PAD, PAD + 20)
-  ctx.fillStyle = '#6b7280'
-  ctx.font = `13px -apple-system, system-ui, sans-serif`
-  ctx.fillText(`${o.nome_orientando}  ·  ${o.curso}`, PAD, PAD + 42)
-  ctx.fillStyle = '#9ca3af'
-  ctx.font = `11px -apple-system, system-ui, sans-serif`
-  ctx.fillText(new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' }), PAD, PAD + 62)
-  ctx.strokeStyle = '#e5e7eb'; ctx.lineWidth = 1
-  ctx.beginPath(); ctx.moveTo(PAD, headerH - 8); ctx.lineTo(W - PAD, headerH - 8); ctx.stroke()
+  const cx = pad, cy = pad, cw = S - pad * 2, ch = S - pad * 2
 
-  let y = headerH + 8
-  if (items.length === 0) {
-    ctx.fillStyle = '#9ca3af'
-    ctx.font = `italic 13px -apple-system, system-ui, sans-serif`
-    ctx.fillText('Nenhum prazo ou tarefa registrado.', PAD, y + lineH)
+  // ── Amber top bar ──
+  ctx.fillStyle = '#d97706'
+  ctx.beginPath(); ctx.roundRect(cx, cy, cw, 18, [r, r, 0, 0]); ctx.fill()
+
+  // ── Header ──
+  let y = cy + 74
+  ctx.fillStyle = '#d97706'; ctx.font = 'bold 24px system-ui,sans-serif'
+  ctx.fillText('coLAB · Prazos e Tarefas', cx + 56, y); y += 52
+
+  ctx.fillStyle = '#78350f'; ctx.font = 'bold 56px system-ui,sans-serif'
+  const nameLines = wrapTextCanvas(ctx, o.nome_orientando, cw - 112)
+  for (const ln of nameLines.slice(0, 2)) { ctx.fillText(ln, cx + 56, y); y += 68 }
+  y += 4
+
+  ctx.fillStyle = '#d97706'; ctx.font = '32px system-ui,sans-serif'
+  ctx.fillText(o.curso, cx + 56, y); y += 48
+
+  // ── Divider ──
+  y += 16; ctx.strokeStyle = '#fde68a'; ctx.lineWidth = 2
+  ctx.beginPath(); ctx.moveTo(cx + 56, y); ctx.lineTo(cx + cw - 56, y); ctx.stroke(); y += 36
+
+  // ── Section label ──
+  const total = prazos.length
+  const done = prazos.filter(p => p.tarefa_cumprida).length
+  ctx.fillStyle = '#b45309'; ctx.font = 'bold 24px system-ui,sans-serif'
+  ctx.fillText(`TAREFAS  ${done}/${total} concluídas`, cx + 56, y); y += 48
+
+  // ── Task items ──
+  const maxItemY = cy + ch - 80
+  const itemLineH = 42
+
+  if (prazos.length === 0) {
+    ctx.fillStyle = '#9ca3af'; ctx.font = 'italic 32px system-ui,sans-serif'
+    ctx.fillText('Nenhum prazo ou tarefa registrado.', cx + 56, y)
   } else {
-    for (const { r, lines } of items) {
-      const done = !!r.tarefa_cumprida
-      const important = !!r.importante
-      const cbY = y + 2
+    for (const [i, p] of prazos.entries()) {
+      if (y > maxItemY) {
+        ctx.fillStyle = '#9ca3af'; ctx.font = '28px system-ui,sans-serif'
+        ctx.fillText(`… mais ${prazos.length - i} item(ns)`, cx + 56, y); break
+      }
 
-      // checkbox
-      ctx.lineWidth = 1.5
-      ctx.strokeStyle = done ? '#d1d5db' : (important ? '#f59e0b' : '#3b82f6')
-      ctx.fillStyle = done ? '#f9fafb' : '#ffffff'
-      ctx.beginPath(); ctx.roundRect(PAD, cbY, 16, 16, 3); ctx.fill(); ctx.stroke()
-      if (done) {
-        ctx.strokeStyle = '#9ca3af'; ctx.lineWidth = 2
+      const isDone = !!p.tarefa_cumprida
+
+      // Checkbox
+      const cbSize = 34, cbX = cx + 56, cbY = y - cbSize + 6
+      ctx.lineWidth = isDone ? 1.5 : 2.5
+      ctx.strokeStyle = isDone ? '#d1d5db' : '#FFB351'
+      ctx.fillStyle = isDone ? '#f9fafb' : '#fffbeb'
+      ctx.beginPath(); ctx.roundRect(cbX, cbY, cbSize, cbSize, 6); ctx.fill(); ctx.stroke()
+      if (isDone) {
+        ctx.strokeStyle = '#9ca3af'; ctx.lineWidth = 3
         ctx.beginPath()
-        ctx.moveTo(PAD + 3, cbY + 8); ctx.lineTo(PAD + 7, cbY + 12); ctx.lineTo(PAD + 13, cbY + 3)
+        ctx.moveTo(cbX + 7, cbY + 17); ctx.lineTo(cbX + 14, cbY + 24); ctx.lineTo(cbX + 27, cbY + 8)
         ctx.stroke()
       }
 
-      // date pill
-      let textX = PAD + 24
-      if (r.data) {
-        ctx.font = MONO
-        const dW = ctx.measureText(r.data).width + 12
-        ctx.fillStyle = done ? '#f3f4f6' : '#eff6ff'
-        ctx.strokeStyle = done ? '#e5e7eb' : '#bfdbfe'; ctx.lineWidth = 1
-        ctx.beginPath(); ctx.roundRect(textX, cbY, dW, 16, 8); ctx.fill(); ctx.stroke()
-        ctx.fillStyle = done ? '#9ca3af' : '#3b82f6'
-        ctx.fillText(r.data, textX + 6, cbY + 12)
-        textX += dW + 8
+      // Date badge
+      let textX = cx + 56 + cbSize + 18
+      if (p.data) {
+        ctx.font = '24px monospace'
+        const dW = ctx.measureText(p.data).width + 24
+        ctx.fillStyle = isDone ? '#f3f4f6' : '#fef3c7'
+        ctx.strokeStyle = isDone ? '#e5e7eb' : '#fcd34d'; ctx.lineWidth = 1.5
+        ctx.beginPath(); ctx.roundRect(textX, cbY + 4, dW, 26, 13); ctx.fill(); ctx.stroke()
+        ctx.fillStyle = isDone ? '#9ca3af' : '#92400e'
+        ctx.fillText(p.data, textX + 12, cbY + 22)
+        textX += dW + 16
       }
 
-      // text
-      ctx.font = FONT
-      ctx.fillStyle = done ? '#9ca3af' : '#111827'
-      for (let li = 0; li < lines.length; li++) {
-        const lineY = y + li * lineH + 14
-        const lx = li === 0 ? textX : PAD + 24
-        ctx.fillText(lines[li], lx, lineY)
-        if (done) {
-          const tw = ctx.measureText(lines[li]).width
-          ctx.strokeStyle = '#9ca3af'; ctx.lineWidth = 1
-          ctx.beginPath(); ctx.moveTo(lx, lineY - 5); ctx.lineTo(lx + tw, lineY - 5); ctx.stroke()
+      // Text
+      ctx.font = isDone ? '32px system-ui,sans-serif' : '32px system-ui,sans-serif'
+      ctx.fillStyle = isDone ? '#9ca3af' : '#1f2937'
+      const textMaxW = cx + cw - 56 - textX - (p.importante ? 52 : 0)
+      const tlines = wrapTextCanvas(ctx, p.texto, textMaxW)
+      for (const [li, ln] of tlines.slice(0, 2).entries()) {
+        const ly = y + li * itemLineH
+        ctx.fillText(ln, textX, ly)
+        if (isDone) {
+          const tw = ctx.measureText(ln).width
+          ctx.strokeStyle = '#9ca3af'; ctx.lineWidth = 2
+          ctx.beginPath(); ctx.moveTo(textX, ly - 12); ctx.lineTo(textX + tw, ly - 12); ctx.stroke()
         }
       }
 
-      // importante
-      if (important) {
-        ctx.font = `bold 11px -apple-system, system-ui, sans-serif`
-        ctx.fillStyle = '#d97706'
-        ctx.fillText('★', W - PAD - 12, y + 16)
+      // Importante star
+      if (p.importante) {
+        ctx.fillStyle = '#d97706'; ctx.font = 'bold 30px system-ui,sans-serif'
+        ctx.fillText('★', cx + cw - 56 - 30, y)
       }
 
-      y += lines.length * lineH + ITEM_GAP + 10
+      y += Math.max(tlines.slice(0, 2).length * itemLineH, cbSize) + 24
     }
   }
+
+  // ── Amber footer bar ──
+  const fh = 64
+  ctx.fillStyle = '#d97706'
+  ctx.beginPath(); ctx.roundRect(cx, cy + ch - fh, cw, fh, [0, 0, r, r]); ctx.fill()
+  ctx.fillStyle = 'rgba(255,255,255,0.88)'; ctx.font = '24px system-ui,sans-serif'
+  const dateStr = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
+  ctx.fillText(`Prazos e Tarefas · coLAB  —  ${dateStr}`, cx + 52, cy + ch - fh + 40)
 
   canvas.toBlob(blob => {
     if (!blob) return
