@@ -187,6 +187,12 @@ export interface TimelineData {
 
 // ─── Wiki ─────────────────────────────────────────────────────────────────
 
+export interface WikiSection {
+  id: string
+  name: string
+  order: number
+}
+
 export interface WikiEntry {
   id: string
   title: string

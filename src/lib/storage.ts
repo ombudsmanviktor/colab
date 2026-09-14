@@ -607,6 +607,8 @@ function parseWikiMd(text: string, fallbackId: string): WikiEntry {
         updated_at: String(meta.updated_at ?? ''),
         created_by: String(meta.created_by ?? ''),
         updated_by: String(meta.updated_by ?? ''),
+        ...(meta.category ? { category: String(meta.category) } : {}),
+        ...(meta.description ? { description: String(meta.description) } : {}),
         content: match[2].trim(),
       }
     } catch { /* fall through */ }
@@ -654,6 +656,21 @@ export async function saveWikiEntry(entry: WikiEntry): Promise<void> {
 export async function deleteWikiEntry(id: string): Promise<void> {
   if (isDemoMode()) { demoDeleteWikiEntry(id); return }
   await removeYaml(`${WIKI_DIR}/${id}.md`, `Delete wiki entry ${id}`)
+}
+
+// ─── Wiki Sections ─────────────────────────────────────────────────────────
+
+const WIKI_SECTIONS_PATH = 'wiki/_sections.yaml'
+
+export async function loadWikiSections(): Promise<import('@/types').WikiSection[]> {
+  if (isDemoMode()) return []
+  const data = await readYaml<import('@/types').WikiSection[]>(WIKI_SECTIONS_PATH, true)
+  return (data ?? []).sort((a, b) => a.order - b.order)
+}
+
+export async function saveWikiSections(sections: import('@/types').WikiSection[]): Promise<void> {
+  if (isDemoMode()) return
+  await writeYaml(WIKI_SECTIONS_PATH, sections, 'Update wiki sections')
 }
 
 export interface WikiHistoryItem {

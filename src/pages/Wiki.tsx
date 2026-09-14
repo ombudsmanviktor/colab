@@ -5,42 +5,43 @@ import {
   Bold, Italic, Strikethrough, Heading1, Heading2, Heading3,
   List, ListOrdered, Quote, Code, Minus, Download, Upload,
   Search, ChevronLeft, FilePlus, GripVertical, History,
+  Settings, ChevronUp, ChevronDown, FolderPlus,
 } from 'lucide-react'
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useAuth } from '@/contexts/AuthContext'
-import { loadWikiEntries, saveWikiEntry, deleteWikiEntry, uploadWikiImage, generateId, getWikiEntryHistory, getWikiEntryAtVersion, type WikiHistoryItem } from '@/lib/storage'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { loadWikiEntries, saveWikiEntry, deleteWikiEntry, uploadWikiImage, generateId, getWikiEntryHistory, getWikiEntryAtVersion, loadWikiSections, saveWikiSections, type WikiHistoryItem } from '@/lib/storage'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/hooks/useToast'
 import { ToastContainer } from '@/components/ui/toast'
-import type { WikiEntry } from '@/types'
+import type { WikiEntry, WikiSection } from '@/types'
 
-// ─── Categories ───────────────────────────────────────────────────────────
-
-export const WIKI_CATEGORIES = [
-  'O Básico da Vida Acadêmica',
-  'Facilitando a Pesquisa',
-  'DIY: Para você se virar sozinho(a)',
-  'Nossa Comunicação Interna',
-] as const
-
-function groupByCategory(entries: WikiEntry[]): Array<{ category: string | null; items: WikiEntry[] }> {
-  const known = WIKI_CATEGORIES as readonly string[]
-  const map = new Map<string | null, WikiEntry[]>()
+function groupBySections(
+  entries: WikiEntry[],
+  sections: WikiSection[],
+): Array<{ section: WikiSection | null; id: string; items: WikiEntry[] }> {
+  const sorted = [...sections].sort((a, b) => a.order - b.order)
+  const map = new Map<string, WikiEntry[]>()
+  for (const s of sorted) map.set(s.id, [])
+  map.set('__none__', [])
   for (const e of entries) {
-    const cat = (e.category && known.includes(e.category)) ? e.category : null
-    if (!map.has(cat)) map.set(cat, [])
-    map.get(cat)!.push(e)
+    const sec = e.category ? sorted.find(s => s.id === e.category || s.name === e.category) : null
+    const key = sec ? sec.id : '__none__'
+    map.get(key)!.push(e)
   }
-  const result: Array<{ category: string | null; items: WikiEntry[] }> = []
-  for (const cat of known) {
-    if (map.has(cat)) result.push({ category: cat, items: map.get(cat)! })
+  // sort entries within each section by order
+  for (const [, list] of map) list.sort((a, b) => a.order - b.order)
+  const result: Array<{ section: WikiSection | null; id: string; items: WikiEntry[] }> = []
+  for (const s of sorted) {
+    const items = map.get(s.id)!
+    result.push({ section: s, id: s.id, items })
   }
-  if (map.has(null) && map.get(null)!.length > 0) result.push({ category: null, items: map.get(null)! })
+  const none = map.get('__none__')!
+  if (none.length > 0) result.push({ section: null, id: '__none__', items: none })
   return result
 }
 
@@ -344,8 +345,9 @@ function Toolbar({ onApply, onLinkClick, onImageClick }: {
 
 // ─── Wiki Editor ──────────────────────────────────────────────────────────
 
-function WikiEditor({ entry, onSave, onCancel, isNew }: {
+function WikiEditor({ entry, sections, onSave, onCancel, isNew }: {
   entry: WikiEntry
+  sections: WikiSection[]
   onSave: (e: WikiEntry) => Promise<void>
   onCancel: () => void
   isNew: boolean
@@ -451,8 +453,10 @@ function WikiEditor({ entry, onSave, onCancel, isNew }: {
             onChange={e => setCategory(e.target.value)}
             className="text-xs px-2 py-1 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 outline-none focus:border-amber-400"
           >
-            <option value="">Sem categoria</option>
-            {WIKI_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+            <option value="">Sem seção</option>
+            {[...sections].sort((a, b) => a.order - b.order).map(s => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
           </select>
           <input
             value={description}
@@ -828,13 +832,15 @@ function WikiTocEntry({ entry, idx, onSelectEntry }: { entry: WikiEntry; idx: nu
   )
 }
 
-function WikiToc({ entries, onSelectEntry, onNew }: {
+function WikiToc({ entries, sections, onSelectEntry, onNew }: {
   entries: WikiEntry[]
+  sections: WikiSection[]
   onSelectEntry: (id: string) => void
   onNew: () => void
 }) {
-  const groups = groupByCategory(entries)
-  const hasCategories = groups.some(g => g.category !== null)
+  const groups = groupBySections(entries, sections)
+  const hasSections = groups.some(g => g.section !== null)
+  let globalIdx = 0
 
   return (
     <div className="flex-1 overflow-y-auto px-8 py-8">
@@ -851,22 +857,27 @@ function WikiToc({ entries, onSelectEntry, onNew }: {
               <FilePlus className="w-4 h-4" /> Nova entrada
             </Button>
           </div>
-        ) : hasCategories ? (
+        ) : hasSections ? (
           <div className="space-y-8">
-            {groups.map(({ category, items }) => {
-              let globalIdx = entries.findIndex(e => e.id === items[0]?.id)
+            {groups.map(({ section, id, items }) => {
+              const start = globalIdx
+              globalIdx += items.length
               return (
-                <section key={category ?? '__none__'}>
-                  {category && (
+                <section key={id}>
+                  {section && (
                     <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-3 pb-1 border-b border-gray-100 dark:border-gray-800">
-                      {category}
+                      {section.name}
+                    </h2>
+                  )}
+                  {!section && hasSections && (
+                    <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-3 pb-1 border-b border-gray-100 dark:border-gray-800">
+                      Sem seção
                     </h2>
                   )}
                   <ol className="space-y-2">
-                    {items.map((entry, i) => {
-                      const idx = globalIdx + i
-                      return <WikiTocEntry key={entry.id} entry={entry} idx={idx} onSelectEntry={onSelectEntry} />
-                    })}
+                    {items.map((entry, i) => (
+                      <WikiTocEntry key={entry.id} entry={entry} idx={start + i} onSelectEntry={onSelectEntry} />
+                    ))}
                   </ol>
                 </section>
               )
@@ -884,6 +895,104 @@ function WikiToc({ entries, onSelectEntry, onNew }: {
   )
 }
 
+// ─── Sections manager dialog ───────────────────────────────────────────────
+
+function SectionsDialog({ sections, onClose, onSave }: {
+  sections: WikiSection[]
+  onClose: () => void
+  onSave: (sections: WikiSection[]) => Promise<void>
+}) {
+  const [list, setList] = useState(() => [...sections].sort((a, b) => a.order - b.order))
+  const [newName, setNewName] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  function addSection() {
+    const name = newName.trim()
+    if (!name) return
+    setList(prev => [...prev, { id: generateId(), name, order: prev.length }])
+    setNewName('')
+  }
+
+  function rename(id: string, name: string) {
+    setList(prev => prev.map(s => s.id === id ? { ...s, name } : s))
+  }
+
+  function remove(id: string) {
+    setList(prev => prev.filter(s => s.id !== id).map((s, i) => ({ ...s, order: i })))
+  }
+
+  function move(id: string, dir: -1 | 1) {
+    setList(prev => {
+      const idx = prev.findIndex(s => s.id === id)
+      const next = idx + dir
+      if (next < 0 || next >= prev.length) return prev
+      const arr = [...prev]
+      ;[arr[idx], arr[next]] = [arr[next], arr[idx]]
+      return arr.map((s, i) => ({ ...s, order: i }))
+    })
+  }
+
+  async function handleSave() {
+    setSaving(true)
+    await onSave(list.map((s, i) => ({ ...s, order: i })))
+    setSaving(false)
+    onClose()
+  }
+
+  return (
+    <Dialog open onOpenChange={open => { if (!open) onClose() }}>
+      <DialogContent className="max-w-md dark:bg-gray-900 dark:border-gray-800">
+        <DialogHeader>
+          <DialogTitle>Gerenciar Seções</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-1 max-h-80 overflow-y-auto py-1">
+          {list.length === 0 && (
+            <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-4">Nenhuma seção ainda</p>
+          )}
+          {list.map((s, i) => (
+            <div key={s.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 group">
+              <input
+                value={s.name}
+                onChange={e => rename(s.id, e.target.value)}
+                className="flex-1 text-sm bg-transparent outline-none border-b border-transparent focus:border-amber-400 text-gray-800 dark:text-gray-200 py-0.5"
+              />
+              <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button onClick={() => move(s.id, -1)} disabled={i === 0} className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-20">
+                  <ChevronUp className="w-3.5 h-3.5" />
+                </button>
+                <button onClick={() => move(s.id, 1)} disabled={i === list.length - 1} className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-20">
+                  <ChevronDown className="w-3.5 h-3.5" />
+                </button>
+                <button onClick={() => remove(s.id)} className="p-1 text-gray-400 hover:text-red-500">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="flex gap-2 pt-1 border-t border-gray-100 dark:border-gray-800">
+          <input
+            value={newName}
+            onChange={e => setNewName(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') addSection() }}
+            placeholder="Nova seção…"
+            className="flex-1 text-sm px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 outline-none focus:border-amber-400 placeholder:text-gray-300 dark:placeholder:text-gray-600"
+          />
+          <Button size="sm" variant="outline" onClick={addSection} disabled={!newName.trim()}>
+            <FolderPlus className="w-3.5 h-3.5" />
+          </Button>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>Cancelar</Button>
+          <Button onClick={handleSave} disabled={saving} className="bg-amber-500 hover:bg-amber-600 text-white">
+            {saving ? 'Salvando…' : 'Salvar'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────
 
 export function WikiPage() {
@@ -896,16 +1005,27 @@ export function WikiPage() {
     queryFn: loadWikiEntries,
   })
 
+  const { data: sections = [], isLoading: sectionsLoading } = useQuery({
+    queryKey: ['wiki-sections'],
+    queryFn: loadWikiSections,
+  })
+
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [showMobileEntry, setShowMobileEntry] = useState(false)
+  const [showSections, setShowSections] = useState(false)
   const importRef = useRef<HTMLInputElement>(null)
 
-  const sorted = [...entries].sort((a, b) => a.order - b.order)
-  const filtered = sorted.filter(e =>
-    e.title.toLowerCase().includes(search.toLowerCase()) ||
-    e.content.toLowerCase().includes(search.toLowerCase())
+  // sorted within sections: primary sort by section order, secondary by entry order
+  const groups = groupBySections(entries, sections)
+  const sorted = groups.flatMap(g => g.items)
+  const filtered = (search
+    ? entries.filter(e =>
+        e.title.toLowerCase().includes(search.toLowerCase()) ||
+        e.content.toLowerCase().includes(search.toLowerCase())
+      ).sort((a, b) => a.order - b.order)
+    : sorted
   )
 
   const selected = entries.find(e => e.id === selectedId) ?? null
@@ -918,15 +1038,28 @@ export function WikiPage() {
     setShowMobileEntry(true)
   }
 
+  async function handleSaveSections(updated: WikiSection[]) {
+    queryClient.setQueryData(['wiki-sections'], updated)
+    try {
+      await saveWikiSections(updated)
+      toast({ title: 'Seções salvas' })
+    } catch {
+      queryClient.invalidateQueries({ queryKey: ['wiki-sections'] })
+      toast({ title: 'Erro ao salvar seções', variant: 'destructive' })
+    }
+  }
+
   function handleNew() {
     const now = new Date().toISOString()
     const inheritedCategory = selected?.category
+    const sectionGroup = groups.find(g => g.items.some(e => e.id === selected?.id))
+    const sectionOrder = sectionGroup ? sectionGroup.items.length : entries.length
     const newEntry: WikiEntry = {
       id: generateId(),
       title: 'Nova entrada',
       content: '',
       category: inheritedCategory,
-      order: entries.length,
+      order: sectionOrder,
       created_at: now,
       updated_at: now,
       created_by: session?.email ?? '',
@@ -977,25 +1110,62 @@ export function WikiPage() {
   }
 
   async function handleReorder(result: DropResult) {
-    if (!result.destination || result.source.index === result.destination.index) return
+    if (!result.destination) return
+    const { source, destination, draggableId } = result
 
-    const reordered = [...sorted]
-    const [moved] = reordered.splice(result.source.index, 1)
-    reordered.splice(result.destination.index, 0, moved)
+    if (source.droppableId === destination.droppableId && source.index === destination.index) return
 
-    const withOrder = reordered.map((e, i) => ({ ...e, order: i }))
-    queryClient.setQueryData(['wiki'], withOrder)
-
-    const changed = withOrder.filter(e => {
-      const original = entries.find(x => x.id === e.id)
-      return original && original.order !== e.order
-    })
-
-    try {
-      await Promise.all(changed.map(e => saveWikiEntry(e)))
-    } catch {
-      toast({ title: 'Erro ao reordenar', variant: 'destructive' })
-      queryClient.setQueryData(['wiki'], entries)
+    if (source.droppableId !== destination.droppableId) {
+      // Moving between sections: update category and recompute orders per section
+      const destGroupId = destination.droppableId
+      const newGroups = groups.map(g => {
+        if (g.id === source.droppableId) {
+          return { ...g, items: g.items.filter(e => e.id !== draggableId) }
+        }
+        if (g.id === destGroupId) {
+          const entry = entries.find(e => e.id === draggableId)!
+          const newItems = [...g.items]
+          newItems.splice(destination.index, 0, entry)
+          return { ...g, items: newItems }
+        }
+        return g
+      })
+      const toSave: WikiEntry[] = []
+      for (const g of newGroups) {
+        const newCat = g.section ? g.section.id : undefined
+        g.items.forEach((e, i) => toSave.push({ ...e, category: newCat, order: i }))
+      }
+      queryClient.setQueryData(['wiki'], toSave)
+      const changed = toSave.filter(e => {
+        const orig = entries.find(x => x.id === e.id)
+        return orig && (orig.order !== e.order || orig.category !== e.category)
+      })
+      try {
+        await Promise.all(changed.map(e => saveWikiEntry(e)))
+      } catch {
+        toast({ title: 'Erro ao reordenar', variant: 'destructive' })
+        queryClient.setQueryData(['wiki'], entries)
+      }
+    } else {
+      // Moving within same section
+      const group = groups.find(g => g.id === source.droppableId)
+      if (!group) return
+      const newItems = [...group.items]
+      const [moved] = newItems.splice(source.index, 1)
+      newItems.splice(destination.index, 0, moved)
+      const updatedItems = newItems.map((e, i) => ({ ...e, order: i }))
+      const updatedEntries = entries.map(e => updatedItems.find(u => u.id === e.id) ?? e)
+      queryClient.setQueryData(['wiki'], updatedEntries)
+      const changed = updatedItems.filter(e => {
+        const orig = entries.find(x => x.id === e.id)
+        return orig && orig.order !== e.order
+      })
+      try {
+        await Promise.all(changed.map(e => saveWikiEntry(e)))
+      } catch {
+        toast({ title: 'Erro ao reordenar', variant: 'destructive' })
+        queryClient.setQueryData(['wiki'], entries)
+      }
     }
   }
 
@@ -1029,7 +1199,7 @@ export function WikiPage() {
     }
   }
 
-  if (isLoading) return (
+  if (isLoading || sectionsLoading) return (
     <div className="flex justify-center py-16">
       <div className="w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin" />
     </div>
@@ -1059,6 +1229,12 @@ export function WikiPage() {
               <span className="text-sm font-semibold text-gray-800 dark:text-gray-100">Wiki</span>
             </div>
             <div className="flex items-center gap-1">
+              {session?.isAdmin && (
+                <button onClick={() => setShowSections(true)} title="Gerenciar seções"
+                  className="p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 transition-colors">
+                  <Settings className="w-3.5 h-3.5" />
+                </button>
+              )}
               <button onClick={() => importRef.current?.click()} title="Importar .md"
                 className="p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 transition-colors">
                 <Upload className="w-3.5 h-3.5" />
@@ -1108,37 +1284,35 @@ export function WikiPage() {
           {/* Entries: D&D when not searching, plain list when searching */}
           {!search ? (
             <DragDropContext onDragEnd={handleReorder}>
-              <Droppable droppableId="wiki-entries">
-                {provided => (
-                  <nav
-                    className="flex-1 overflow-y-auto py-1"
-                    ref={provided.innerRef}
-                    {...provided.droppableProps}
-                  >
-                    {sorted.length === 0 ? (
-                      <div className="text-center py-10 px-4">
-                        <BookText className="w-8 h-8 text-gray-200 dark:text-gray-700 mx-auto mb-2" />
-                        <p className="text-xs text-gray-400 dark:text-gray-600">Nenhuma entrada ainda</p>
-                        <button onClick={handleNew} className="mt-3 flex items-center gap-1.5 text-xs text-amber-500 hover:text-amber-700 mx-auto">
-                          <Plus className="w-3.5 h-3.5" /> Criar primeira entrada
-                        </button>
+              <nav className="flex-1 overflow-y-auto py-1">
+                {sorted.length === 0 ? (
+                  <div className="text-center py-10 px-4">
+                    <BookText className="w-8 h-8 text-gray-200 dark:text-gray-700 mx-auto mb-2" />
+                    <p className="text-xs text-gray-400 dark:text-gray-600">Nenhuma entrada ainda</p>
+                    <button onClick={handleNew} className="mt-3 flex items-center gap-1.5 text-xs text-amber-500 hover:text-amber-700 mx-auto">
+                      <Plus className="w-3.5 h-3.5" /> Criar primeira entrada
+                    </button>
+                  </div>
+                ) : groups.map(({ section, id, items }) => (
+                  <div key={id}>
+                    {section ? (
+                      <div className="px-4 pt-3 pb-1">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-gray-600 truncate">
+                          {section.name}
+                        </p>
                       </div>
-                    ) : (() => {
-                      let lastCat: string | undefined | null = undefined
-                      return sorted.map((entry, index) => {
-                        const cat = entry.category ?? null
-                        const showCatHeader = cat !== lastCat
-                        lastCat = cat
-                        return (
-                          <div key={entry.id}>
-                            {showCatHeader && cat && (
-                              <div className="px-4 pt-3 pb-1">
-                                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-gray-600 truncate">
-                                  {cat}
-                                </p>
-                              </div>
-                            )}
-                            <Draggable draggableId={entry.id} index={index}>
+                    ) : groups.length > 1 ? (
+                      <div className="px-4 pt-3 pb-1">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-300 dark:text-gray-700 truncate">
+                          Sem seção
+                        </p>
+                      </div>
+                    ) : null}
+                    <Droppable droppableId={id}>
+                      {provided => (
+                        <div ref={provided.innerRef} {...provided.droppableProps} className="min-h-[4px]">
+                          {items.map((entry, index) => (
+                            <Draggable key={entry.id} draggableId={entry.id} index={index}>
                               {(prov, snap) => (
                                 <div
                                   ref={prov.innerRef}
@@ -1170,14 +1344,14 @@ export function WikiPage() {
                                 </div>
                               )}
                             </Draggable>
-                          </div>
-                        )
-                      })
-                    })()}
-                    {provided.placeholder}
-                  </nav>
-                )}
-              </Droppable>
+                          ))}
+                          {provided.placeholder}
+                        </div>
+                      )}
+                    </Droppable>
+                  </div>
+                ))}
+              </nav>
             </DragDropContext>
           ) : (
             <nav className="flex-1 overflow-y-auto py-1">
@@ -1221,6 +1395,7 @@ export function WikiPage() {
           {isEditing && editingEntry ? (
             <WikiEditor
               entry={editingEntry}
+              sections={sections}
               onSave={handleSave}
               onCancel={() => handleCancel(editingEntry.id)}
               isNew={editingEntry.title === 'Nova entrada' && !editingEntry.content}
@@ -1238,10 +1413,18 @@ export function WikiPage() {
               }}
             />
           ) : (
-            <WikiToc entries={sorted} onSelectEntry={selectEntry} onNew={handleNew} />
+            <WikiToc entries={sorted} sections={sections} onSelectEntry={selectEntry} onNew={handleNew} />
           )}
         </main>
       </div>
+
+      {showSections && (
+        <SectionsDialog
+          sections={sections}
+          onClose={() => setShowSections(false)}
+          onSave={handleSaveSections}
+        />
+      )}
 
       <ToastContainer toasts={toasts} onDismiss={dismiss} />
     </div>
