@@ -11,7 +11,7 @@ import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-p
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useAuth } from '@/contexts/AuthContext'
-import { loadWikiEntries, saveWikiEntry, deleteWikiEntry, uploadWikiImage, generateId, getWikiEntryHistory, getWikiEntryAtVersion, loadWikiSections, saveWikiSections, type WikiHistoryItem } from '@/lib/storage'
+import { loadWikiEntries, saveWikiEntry, deleteWikiEntry, uploadWikiImage, generateId, getWikiEntryHistory, getWikiEntryAtVersion, loadWikiSections, saveWikiSections, logActivity, type WikiHistoryItem } from '@/lib/storage'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -1043,6 +1043,7 @@ export function WikiPage() {
     try {
       await saveWikiSections(updated)
       toast({ title: 'Seções salvas' })
+      logActivity({ actor: session?.email ?? '', module: 'Wiki', action: 'update', description: `${session?.email} atualizou as seções do Wiki` })
     } catch {
       queryClient.invalidateQueries({ queryKey: ['wiki-sections'] })
       toast({ title: 'Erro ao salvar seções', variant: 'destructive' })
@@ -1074,6 +1075,7 @@ export function WikiPage() {
   async function handleSave(updated: WikiEntry) {
     const now = new Date().toISOString()
     const toSave = { ...updated, updated_at: now, updated_by: session?.email ?? '' }
+    const isNew = !entries.find(e => e.id === toSave.id)
     try {
       await saveWikiEntry(toSave)
       queryClient.setQueryData(['wiki'], (prev: WikiEntry[] = []) => {
@@ -1082,17 +1084,25 @@ export function WikiPage() {
       })
       setEditingId(null)
       toast({ title: 'Entrada salva' })
+      logActivity({
+        actor: session?.email ?? '',
+        module: 'Wiki',
+        action: isNew ? 'create' : 'update',
+        description: `${session?.email} ${isNew ? 'criou' : 'atualizou'} a entrada "${toSave.title}" no Wiki`,
+      })
     } catch {
       toast({ title: 'Erro ao salvar', variant: 'destructive' })
     }
   }
 
   async function handleDelete(id: string) {
+    const entry = entries.find(e => e.id === id)
     try {
       await deleteWikiEntry(id)
       queryClient.setQueryData(['wiki'], (prev: WikiEntry[] = []) => prev.filter(e => e.id !== id))
       if (selectedId === id) { setSelectedId(null); setShowMobileEntry(false) }
       toast({ title: 'Entrada removida' })
+      if (entry) logActivity({ actor: session?.email ?? '', module: 'Wiki', action: 'delete', description: `${session?.email} removeu a entrada "${entry.title}" do Wiki` })
     } catch {
       toast({ title: 'Erro ao remover', variant: 'destructive' })
     }

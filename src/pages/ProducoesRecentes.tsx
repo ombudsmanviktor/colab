@@ -4,7 +4,7 @@ import {
   BookMarked, Plus, Download, Trash2, Mail, Edit2, X, Upload, FileText, Users, Calendar,
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
-import { loadProducoes, saveProducao, deleteProducao, loadUsersIndex, generateId } from '@/lib/storage'
+import { loadProducoes, saveProducao, deleteProducao, loadUsersIndex, generateId, logActivity } from '@/lib/storage'
 import { extractPdfMetadata } from '@/lib/pdfExtract'
 import { sendLeituraNotification } from '@/lib/emailjs'
 import { Button } from '@/components/ui/button'
@@ -572,18 +572,24 @@ export function ProducoesRecentes() {
   }, [exportOpen])
 
   async function handleSave(p: Producao) {
+    const producoes = queryClient.getQueryData<Producao[]>(['producoes']) ?? []
+    const isNew = !producoes.find(x => x.id === p.id)
     await saveProducao(p)
     queryClient.setQueryData(['producoes'], (prev: Producao[] = []) => {
       const exists = prev.find(x => x.id === p.id)
       return exists ? prev.map(x => x.id === p.id ? p : x) : [p, ...prev]
     })
     toast({ title: 'Produção salva' })
+    logActivity({ actor: session?.email ?? '', module: 'Produções', action: isNew ? 'add' : 'update', description: `${session?.email} ${isNew ? 'adicionou' : 'atualizou'} a produção "${p.title}"` })
   }
 
   async function handleDelete(id: string) {
+    const producoes = queryClient.getQueryData<Producao[]>(['producoes']) ?? []
+    const p = producoes.find(x => x.id === id)
     await deleteProducao(id)
     queryClient.setQueryData(['producoes'], (prev: Producao[] = []) => prev.filter(x => x.id !== id))
     toast({ title: 'Produção removida' })
+    if (p) logActivity({ actor: session?.email ?? '', module: 'Produções', action: 'delete', description: `${session?.email} removeu a produção "${p.title}"` })
   }
 
   async function handleEmail(p: Producao) {

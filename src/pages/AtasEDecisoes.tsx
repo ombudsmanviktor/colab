@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd'
 import { Plus, Download, X, FileText, GripVertical } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
-import { loadAtas, saveAta, deleteAta, generateId } from '@/lib/storage'
+import { loadAtas, saveAta, deleteAta, generateId, logActivity } from '@/lib/storage'
 import { formatDate } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -61,6 +61,7 @@ export function AtasEDecisoes() {
       )
       setDialogOpen(false)
       toast({ title: editAta ? 'Ata atualizada' : 'Ata criada' })
+      logActivity({ actor: session?.email ?? '', module: 'Atas e Decisões', action: editAta ? 'update' : 'create', description: `${session?.email} ${editAta ? 'atualizou' : 'criou'} a ata "${ata.title}"` })
     } catch (err) {
       toast({ title: 'Erro', description: String(err), variant: 'destructive' })
     }
@@ -69,10 +70,12 @@ export function AtasEDecisoes() {
 
   async function handleDelete() {
     if (!editAta) return
+    const title = editAta.title
     await deleteAta(editAta.id)
     queryClient.setQueryData(['atas'], (prev: AtaDecisao[] = []) => prev.filter(a => a.id !== editAta.id))
     setDialogOpen(false)
     toast({ title: 'Ata removida' })
+    logActivity({ actor: session?.email ?? '', module: 'Atas e Decisões', action: 'delete', description: `${session?.email} removeu a ata "${title}"` })
   }
 
   function onDragEnd(result: DropResult) {

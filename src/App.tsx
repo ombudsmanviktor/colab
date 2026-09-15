@@ -18,6 +18,7 @@ import { OrientacoesPage } from '@/pages/Orientacoes'
 import { LinhaDoTempoPage } from '@/pages/LinhaDoTempo'
 import { ProducoesRecentes } from '@/pages/ProducoesRecentes'
 import { WikiPage } from '@/pages/Wiki'
+import { RegistroAtividades } from '@/pages/RegistroAtividades'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -53,6 +54,7 @@ export default function App() {
                 <Route path="planejamento" element={<PlanejamentoPage />} />
                 <Route path="sugestoes" element={<Sugestoes />} />
                 <Route path="usuarios" element={<Usuarios />} />
+                <Route path="registro-atividades" element={<RegistroAtividades />} />
                 <Route path="orientacoes" element={<OrientacoesPage />} />
                 <Route path="producoes-recentes" element={<ProducoesRecentes />} />
                 <Route path="linha-do-tempo" element={<LinhaDoTempoPage />} />

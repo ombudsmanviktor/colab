@@ -15,7 +15,7 @@ import {
   getFileAtCommit,
   type GitHubConfig,
 } from './github'
-import type { UsersIndex, UserTasks, UserProfile, OrdemDoDia, AtaDecisao, Leitura, Producao, SugestaoMessage, Orientacao, Anexo, TimelineData, CalloutData, WikiEntry, MeetingPlan } from '@/types'
+import type { UsersIndex, UserTasks, UserProfile, OrdemDoDia, AtaDecisao, Leitura, Producao, SugestaoMessage, Orientacao, Anexo, TimelineData, CalloutData, WikiEntry, MeetingPlan, ActivityEntry } from '@/types'
 import type { AppRepoConfig } from '@/lib/appConfig'
 import { emailSlug, generateId } from './utils'
 import {
@@ -824,4 +824,31 @@ export async function uploadWikiImage(file: File): Promise<string> {
 export async function saveAppConfig(config: AppRepoConfig): Promise<void> {
   if (isDemoMode()) return
   await writeYaml('users/app-config.yaml', config, 'Update app config')
+}
+
+// ─── Registro de Atividades ───────────────────────────────────────────────
+
+const ACTIVITY_LOG_PATH = 'activity/log.yaml'
+const MAX_LOG_ENTRIES = 500
+
+export async function logActivity(entry: Omit<ActivityEntry, 'id' | 'timestamp'>): Promise<void> {
+  if (isDemoMode()) return
+  const newEntry: ActivityEntry = { id: generateId(), timestamp: new Date().toISOString(), ...entry }
+  try {
+    await mergeYaml<ActivityEntry[]>(
+      ACTIVITY_LOG_PATH,
+      (current) => {
+        const arr = Array.isArray(current) ? current : []
+        return [newEntry, ...arr].slice(0, MAX_LOG_ENTRIES)
+      },
+      `Log: ${entry.action} in ${entry.module}`,
+      [],
+    )
+  } catch { /* never block the main operation */ }
+}
+
+export async function loadActivityLog(): Promise<ActivityEntry[]> {
+  if (isDemoMode()) return []
+  const data = await readYaml<ActivityEntry[]>(ACTIVITY_LOG_PATH, true)
+  return Array.isArray(data) ? data : []
 }

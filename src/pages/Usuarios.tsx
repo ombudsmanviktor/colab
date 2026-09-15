@@ -4,7 +4,7 @@ import { Plus, Pencil, Trash2, ExternalLink, AlertCircle, Download, Archive, Arc
 import { useAuth } from '@/contexts/AuthContext'
 import {
   loadUsersIndex, saveUsersIndex, addUser, removeUser,
-  loadProfilesByEmails, saveUserProfile,
+  loadProfilesByEmails, saveUserProfile, logActivity,
 } from '@/lib/storage'
 import { emailInitials, emailSlug } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -560,6 +560,7 @@ export function Usuarios() {
     try {
       await removeUser(email) // also deletes tasks + profile files on GitHub
       toast({ title: 'Usuário removido' })
+      logActivity({ actor: myEmail, module: 'Usuários', action: 'remove', description: `${myEmail} removeu o usuário ${email}` })
     } catch (err) {
       // Rollback on failure
       queryClient.invalidateQueries({ queryKey: ['users-index'] })
@@ -619,6 +620,7 @@ export function Usuarios() {
       // and a refetch can return stale data due to GitHub's propagation delay.
       // The cache will sync naturally on the next navigation/focus refetch.
       toast({ title: 'Usuário adicionado' })
+      logActivity({ actor: myEmail, module: 'Usuários', action: 'add', description: `${myEmail} adicionou o usuário ${email}` })
     } catch (err) {
       // Rollback: invalidate so the UI reverts to the real server state
       queryClient.invalidateQueries({ queryKey: ['users-index'] })
@@ -637,6 +639,8 @@ export function Usuarios() {
       return exists ? prev.map(p => p.email === profile.email ? profile : p) : [...prev, profile]
     })
     toast({ title: 'Perfil atualizado' })
+    const targetName = profile.nome || profile.email
+    logActivity({ actor: myEmail, module: 'Usuários', action: 'update', description: `${myEmail} editou o perfil de ${targetName}` })
   }
 
   const isLoading = loadingIndex || loadingProfiles

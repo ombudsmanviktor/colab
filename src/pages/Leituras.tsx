@@ -4,7 +4,7 @@ import {
   BookOpen, Plus, Download, Trash2, Mail, Edit2, X, Upload, FileText,
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
-import { loadLeituras, saveLeitura, deleteLeitura, loadUsersIndex, generateId } from '@/lib/storage'
+import { loadLeituras, saveLeitura, deleteLeitura, loadUsersIndex, generateId, logActivity } from '@/lib/storage'
 import { extractPdfMetadata } from '@/lib/pdfExtract'
 import { sendLeituraNotification } from '@/lib/emailjs'
 import { formatDate } from '@/lib/utils'
@@ -468,18 +468,24 @@ export function Leituras() {
   const grouped = groupByDate(filteredLeituras)
 
   async function handleSave(l: Leitura) {
+    const leituras = queryClient.getQueryData<Leitura[]>(['leituras']) ?? []
+    const isNew = !leituras.find(x => x.id === l.id)
     await saveLeitura(l)
     queryClient.setQueryData(['leituras'], (prev: Leitura[] = []) => {
       const exists = prev.find(x => x.id === l.id)
       return exists ? prev.map(x => x.id === l.id ? l : x) : [l, ...prev]
     })
     toast({ title: 'Leitura salva' })
+    logActivity({ actor: session?.email ?? '', module: 'Leituras', action: isNew ? 'add' : 'update', description: `${session?.email} ${isNew ? 'adicionou' : 'atualizou'} a leitura "${l.title}"` })
   }
 
   async function handleDelete(id: string) {
+    const leituras = queryClient.getQueryData<Leitura[]>(['leituras']) ?? []
+    const l = leituras.find(x => x.id === id)
     await deleteLeitura(id)
     queryClient.setQueryData(['leituras'], (prev: Leitura[] = []) => prev.filter(x => x.id !== id))
     toast({ title: 'Leitura removida' })
+    if (l) logActivity({ actor: session?.email ?? '', module: 'Leituras', action: 'delete', description: `${session?.email} removeu a leitura "${l.title}"` })
   }
 
   async function handleEmail(l: Leitura) {

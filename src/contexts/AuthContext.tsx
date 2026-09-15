@@ -8,7 +8,7 @@ import {
 } from '@/lib/github'
 import { saveEmailJSConfig, clearEmailJSConfig, type EmailJSConfig } from '@/lib/emailjs'
 import { setDemoMode, DEMO_EMAIL } from '@/lib/demoStore'
-import { loadUsersIndex, saveUsersIndex, ensureOwnerAdmin } from '@/lib/storage'
+import { loadUsersIndex, saveUsersIndex, ensureOwnerAdmin, logActivity } from '@/lib/storage'
 
 const SESSION_KEY = 'colab_session'
 const DEMO_KEY = 'colab_demo'
@@ -137,6 +137,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const s: AuthSession = { email, githubConfig, emailJSConfig, isAdmin }
     localStorage.setItem(SESSION_KEY, JSON.stringify(s))
     setSession(s)
+    logActivity({ actor: email, module: 'Login', action: 'login', description: `${email} fez login` })
     return { ok: true }
   }
 

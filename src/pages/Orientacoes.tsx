@@ -9,7 +9,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/hooks/useToast'
 import {
   loadOrientacoes, saveOrientacaoFile, deleteOrientacaoFile, uploadAnexo,
-  downloadPlanPdf, openDocBlob,
+  downloadPlanPdf, openDocBlob, logActivity,
 } from '@/lib/storage'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -411,7 +411,7 @@ const emptyForm: OrientacaoForm = {
 /* ─── Component ──────────────────────────────────────────────────────── */
 
 export function OrientacoesPage() {
-  const { isDemoMode } = useAuth()
+  const { isDemoMode, session } = useAuth()
   const { toasts, toast, dismiss } = useToast()
 
   const [orientacoes, setOrientacoes] = useState<Orientacao[]>([])
@@ -619,6 +619,12 @@ export function OrientacoesPage() {
       : [orientacao, ...prev]
     )
     toast({ title: editing ? 'Orientação atualizada' : 'Orientação criada' })
+    logActivity({
+      actor: session?.email ?? '',
+      module: 'Orientações',
+      action: editing ? 'update' : 'create',
+      description: `${session?.email} ${editing ? 'atualizou' : 'criou'} a orientação de ${orientacao.nome_orientando}`,
+    })
     setPendingProjetoOriginal(null)
     setPendingProjetoFile(null)
     setShowForm(false)
@@ -626,14 +632,16 @@ export function OrientacoesPage() {
 
   async function handleDelete(id: string) {
     if (!confirm('Remover esta orientação?')) return
+    const o = orientacoes.find(x => x.id === id)
     try {
       await deleteOrientacaoFile(id)
     } catch (err: unknown) {
       toast({ title: 'Erro ao remover', description: String(err), variant: 'destructive' })
       return
     }
-    setOrientacoes(prev => prev.filter(o => o.id !== id))
+    setOrientacoes(prev => prev.filter(x => x.id !== id))
     toast({ title: 'Orientação removida' })
+    if (o) logActivity({ actor: session?.email ?? '', module: 'Orientações', action: 'delete', description: `${session?.email} removeu a orientação de ${o.nome_orientando}` })
   }
 
   /* ── Archive ── */

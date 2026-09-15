@@ -249,6 +249,17 @@ export interface Producao {
   createdAt: string
 }
 
+// ─── Registro de Atividades ───────────────────────────────────────────────
+
+export interface ActivityEntry {
+  id: string
+  timestamp: string     // ISO 8601
+  actor: string         // email
+  module: string        // 'Login' | 'Wiki' | 'Orientações' | etc.
+  action: 'login' | 'create' | 'update' | 'delete' | 'add' | 'remove' | 'archive'
+  description: string   // human-readable summary
+}
+
 // ─── Planejamento das Reuniões ────────────────────────────────────────────
 
 export interface PlanReading {

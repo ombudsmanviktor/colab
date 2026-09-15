@@ -11,7 +11,7 @@ import { ToastContainer } from '@/components/ui/toast'
 import { InlineMarkdownField } from '@/components/shared/MarkdownEditor'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/hooks/useToast'
-import { loadOrdemDoDias, saveOrdemDoDia, deleteOrdemDoDia } from '@/lib/storage'
+import { loadOrdemDoDias, saveOrdemDoDia, deleteOrdemDoDia, logActivity } from '@/lib/storage'
 import { cn, formatDate } from '@/lib/utils'
 import type { OrdemDoDia, Pauta, Ata } from '@/types'
 
@@ -481,7 +481,7 @@ export function OrdemDoDiaPage() {
   const [saving, setSaving] = useState<Set<string>>(new Set())
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
   const { toasts, toast, dismiss } = useToast()
-  const { isDemoMode } = useAuth()
+  const { isDemoMode, session } = useAuth()
   const pendingSaves = useRef<Map<string, Promise<void>>>(new Map())
 
   useEffect(() => {
@@ -513,7 +513,11 @@ export function OrdemDoDiaPage() {
       archived: false, created_at: now, updated_at: now,
     }
     setItems(prev => [newItem, ...prev])
-    if (!isDemoMode) { setSaving(prev => new Set(prev).add(newItem.id)); persistSave(newItem) }
+    if (!isDemoMode) {
+      setSaving(prev => new Set(prev).add(newItem.id))
+      persistSave(newItem)
+      logActivity({ actor: session?.email ?? '', module: 'Ordem do Dia', action: 'create', description: `${session?.email} criou uma nova Ordem do Dia` })
+    }
   }
 
   function handleSave(updated: OrdemDoDia) {
@@ -534,9 +538,13 @@ export function OrdemDoDiaPage() {
   }
 
   async function handleDelete(id: string) {
+    const item = items.find(x => x.id === id)
     setItems(prev => prev.filter(x => x.id !== id))
     if (!isDemoMode) {
-      try { await deleteOrdemDoDia(id) }
+      try {
+        await deleteOrdemDoDia(id)
+        logActivity({ actor: session?.email ?? '', module: 'Ordem do Dia', action: 'delete', description: `${session?.email} removeu a Ordem do Dia "${item?.title ?? id}"` })
+      }
       catch { toast({ title: 'Erro ao excluir', variant: 'destructive' }) }
     }
   }

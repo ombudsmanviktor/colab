@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, ClipboardList, FileText, Calendar, BookMarked, BookText, Users, MessageSquare,
-  Menu, X, LogOut, Sun, Moon, Settings, PanelLeftClose, PanelLeftOpen, GraduationCap, Clock,
+  Menu, X, LogOut, Sun, Moon, Settings, PanelLeftClose, PanelLeftOpen, GraduationCap, Clock, Activity,
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useTheme } from '@/contexts/ThemeContext'
@@ -78,6 +78,13 @@ const NAV_ITEMS = [
     icon: Users,
     activeClass: 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300',
     iconClass: 'text-amber-600',
+  },
+  {
+    to: '/app/registro-atividades',
+    label: 'Registro de Atividades',
+    icon: Activity,
+    activeClass: 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300',
+    iconClass: 'text-amber-500',
   },
 ]
 
