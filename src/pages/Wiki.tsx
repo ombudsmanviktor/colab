@@ -1223,8 +1223,6 @@ export function WikiPage() {
   const [search, setSearch] = useState('')
   const [showMobileEntry, setShowMobileEntry] = useState(false)
   const [showSections, setShowSections] = useState(false)
-  const [isDragging, setIsDragging] = useState(false)
-  const [draggingId, setDraggingId] = useState<string | null>(null)
   const importRef = useRef<HTMLInputElement>(null)
 
   // sorted within sections: only top-level entries; sub-entries rendered nested
@@ -1337,12 +1335,11 @@ export function WikiPage() {
   }
 
   async function handleReorder(result: DropResult) {
-    if (!result.destination) return
-    const { source, destination, draggableId } = result
+    const { source, destination, combine, draggableId } = result
 
-    // Drop onto an entry → convert to sub-entry
-    if (destination.droppableId.startsWith('onto-')) {
-      const parentId = destination.droppableId.slice(5)
+    // Drop ON TOP of another entry → convert to sub-entry
+    if (combine) {
+      const parentId = combine.draggableId
       if (parentId === draggableId) return
       const entry = entries.find(e => e.id === draggableId)
       const parentEntry = entries.find(e => e.id === parentId)
@@ -1361,6 +1358,7 @@ export function WikiPage() {
       return
     }
 
+    if (!destination) return
     if (source.droppableId === destination.droppableId && source.index === destination.index) return
 
     if (source.droppableId !== destination.droppableId) {
@@ -1531,10 +1529,7 @@ export function WikiPage() {
 
           {/* Entries: D&D when not searching, plain list when searching */}
           {!search ? (
-            <DragDropContext
-              onDragStart={start => { setIsDragging(true); setDraggingId(start.draggableId) }}
-              onDragEnd={result => { setIsDragging(false); setDraggingId(null); handleReorder(result) }}
-            >
+            <DragDropContext onDragEnd={handleReorder}>
               <nav className="flex-1 overflow-y-auto py-1">
                 {sorted.length === 0 ? (
                   <div className="text-center py-10 px-4">
@@ -1559,7 +1554,7 @@ export function WikiPage() {
                         </p>
                       </div>
                     ) : null}
-                    <Droppable droppableId={id}>
+                    <Droppable droppableId={id} isCombineEnabled>
                       {provided => (
                         <div ref={provided.innerRef} {...provided.droppableProps} className="min-h-[4px]">
                           {items.map((entry, index) => {
@@ -1571,11 +1566,13 @@ export function WikiPage() {
                                     <div
                                       ref={prov.innerRef}
                                       {...prov.draggableProps}
-                                      className={`flex items-center border-l-2 transition-colors ${
-                                        selectedId === entry.id
-                                          ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/40'
-                                          : 'border-transparent hover:bg-white dark:hover:bg-gray-800/60'
-                                      } ${snap.isDragging ? 'opacity-75 shadow-md rounded-r-lg' : ''}`}
+                                      className={`flex items-center border-l-2 transition-colors rounded-r ${
+                                        snap.combineTargetFor
+                                          ? 'border-amber-400 bg-amber-50 dark:bg-amber-950/60 ring-1 ring-inset ring-amber-300 dark:ring-amber-700'
+                                          : selectedId === entry.id
+                                            ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/40'
+                                            : 'border-transparent hover:bg-white dark:hover:bg-gray-800/60'
+                                      } ${snap.isDragging ? 'opacity-75 shadow-md' : ''}`}
                                     >
                                       <div
                                         {...prov.dragHandleProps}
@@ -1588,40 +1585,18 @@ export function WikiPage() {
                                         className="flex-1 text-left py-2.5 pr-4 min-w-0"
                                       >
                                         <p className={`text-sm font-medium truncate ${
-                                          selectedId === entry.id
-                                            ? 'text-amber-700 dark:text-amber-300'
-                                            : 'text-gray-700 dark:text-gray-300'
+                                          snap.combineTargetFor
+                                            ? 'text-amber-600 dark:text-amber-400'
+                                            : selectedId === entry.id
+                                              ? 'text-amber-700 dark:text-amber-300'
+                                              : 'text-gray-700 dark:text-gray-300'
                                         }`}>
-                                          {entry.title}
+                                          {snap.combineTargetFor ? '↳ ' : ''}{entry.title}
                                         </p>
                                       </button>
                                     </div>
                                   )}
                                 </Draggable>
-                                {/* Drop zone: drag onto this entry to make it a sub-entry */}
-                                <Droppable droppableId={`onto-${entry.id}`}>
-                                  {(ontoProv, ontoSnap) => (
-                                    <div
-                                      ref={ontoProv.innerRef}
-                                      {...ontoProv.droppableProps}
-                                      className={`transition-all duration-150 overflow-hidden mx-2 rounded ${
-                                        isDragging && draggingId !== entry.id
-                                          ? ontoSnap.isDraggingOver
-                                            ? 'h-6 mb-1 bg-amber-100 dark:bg-amber-900/50 border border-amber-300 dark:border-amber-700'
-                                            : 'h-5 mb-0.5 bg-gray-50 dark:bg-gray-800/60 border border-dashed border-gray-200 dark:border-gray-700'
-                                          : 'h-0'
-                                      }`}
-                                    >
-                                      {isDragging && draggingId !== entry.id && (
-                                        <span className="flex items-center justify-center h-full gap-1 text-[10px] leading-none text-gray-400 dark:text-gray-500">
-                                          <Layers className="w-2.5 h-2.5" />
-                                          {ontoSnap.isDraggingOver ? 'Soltar para criar subentrada' : 'subentrada'}
-                                        </span>
-                                      )}
-                                      {ontoProv.placeholder}
-                                    </div>
-                                  )}
-                                </Droppable>
                                 {subEntries.map(child => (
                                   <button
                                     key={child.id}
