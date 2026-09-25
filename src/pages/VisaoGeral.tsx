@@ -905,7 +905,7 @@ export function VisaoGeral() {
   const emails = usersIndex?.emails ?? []
   const adminEmails = usersIndex?.admins ?? []
   const [embedOpen, setEmbedOpen] = useState(false)
-  const [viewMode, setViewMode] = useState<ViewMode>('user')
+  const [viewMode, setViewMode] = useState<ViewMode>('front')
   const savingRef = useRef<Map<string, Promise<void>>>(new Map())
 
   useEffect(() => {
@@ -1012,8 +1012,8 @@ export function VisaoGeral() {
   )
 
   const VIEW_MODES: { mode: ViewMode; icon: React.ElementType; title: string }[] = [
-    { mode: 'user',     icon: LayoutDashboard, title: 'Por Usuário' },
     { mode: 'front',    icon: Layers,          title: 'Por Frente de Trabalho' },
+    { mode: 'user',     icon: LayoutDashboard, title: 'Por Usuário' },
     { mode: 'deadline', icon: CalendarDays,    title: 'Por Prazos' },
   ]
 
