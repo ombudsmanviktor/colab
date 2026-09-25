@@ -863,12 +863,11 @@ const wikiHeadingComponents = {
 
 // ─── Wiki Viewer ──────────────────────────────────────────────────────────
 
-function WikiViewer({ entry, onEdit, onDelete, onRestore, onNewChild, onNavigate }: {
+function WikiViewer({ entry, onEdit, onDelete, onRestore, onNavigate }: {
   entry: WikiEntry
   onEdit: () => void
   onDelete: () => void
   onRestore: (updated: WikiEntry) => void
-  onNewChild: () => void
   onNavigate: (id: string) => void
 }) {
   const [showHistory, setShowHistory] = useState(false)
@@ -898,14 +897,6 @@ function WikiViewer({ entry, onEdit, onDelete, onRestore, onNewChild, onNavigate
       <div className="flex items-start justify-between px-6 pt-5 pb-3 border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex-1 min-w-0 pr-4">{entry.title}</h1>
         <div className="flex items-center gap-2 flex-shrink-0">
-          <button
-            onClick={onNewChild}
-            title="Nova subentrada"
-            className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs text-gray-400 hover:text-amber-600 dark:hover:text-amber-400 bg-gray-100 dark:bg-gray-800 hover:bg-amber-50 dark:hover:bg-amber-900/30 transition-colors"
-          >
-            <Layers className="w-3 h-3" />
-            Subentrada
-          </button>
           <button
             onClick={() => setShowHistory(true)}
             title="Histórico de versões"
@@ -1232,6 +1223,8 @@ export function WikiPage() {
   const [search, setSearch] = useState('')
   const [showMobileEntry, setShowMobileEntry] = useState(false)
   const [showSections, setShowSections] = useState(false)
+  const [isDragging, setIsDragging] = useState(false)
+  const [draggingId, setDraggingId] = useState<string | null>(null)
   const importRef = useRef<HTMLInputElement>(null)
 
   // sorted within sections: only top-level entries; sub-entries rendered nested
@@ -1346,6 +1339,27 @@ export function WikiPage() {
   async function handleReorder(result: DropResult) {
     if (!result.destination) return
     const { source, destination, draggableId } = result
+
+    // Drop onto an entry → convert to sub-entry
+    if (destination.droppableId.startsWith('onto-')) {
+      const parentId = destination.droppableId.slice(5)
+      if (parentId === draggableId) return
+      const entry = entries.find(e => e.id === draggableId)
+      const parentEntry = entries.find(e => e.id === parentId)
+      if (!entry || !parentEntry) return
+      const siblings = entries.filter(e => e.parentId === parentId)
+      const updated: WikiEntry = { ...entry, parentId, category: parentEntry.category, order: siblings.length }
+      queryClient.setQueryData(['wiki'], (prev: WikiEntry[] = []) => prev.map(e => e.id === draggableId ? updated : e))
+      try {
+        await saveWikiEntry(updated)
+        toast({ title: `"${entry.title}" agora é subentrada de "${parentEntry.title}"` })
+        logActivity({ actor: session?.email ?? '', module: 'Wiki', action: 'update', description: `${session?.email} converteu "${entry.title}" em subentrada de "${parentEntry.title}"` })
+      } catch {
+        toast({ title: 'Erro ao criar subentrada', variant: 'destructive' })
+        queryClient.invalidateQueries({ queryKey: ['wiki'] })
+      }
+      return
+    }
 
     if (source.droppableId === destination.droppableId && source.index === destination.index) return
 
@@ -1517,7 +1531,10 @@ export function WikiPage() {
 
           {/* Entries: D&D when not searching, plain list when searching */}
           {!search ? (
-            <DragDropContext onDragEnd={handleReorder}>
+            <DragDropContext
+              onDragStart={start => { setIsDragging(true); setDraggingId(start.draggableId) }}
+              onDragEnd={result => { setIsDragging(false); setDraggingId(null); handleReorder(result) }}
+            >
               <nav className="flex-1 overflow-y-auto py-1">
                 {sorted.length === 0 ? (
                   <div className="text-center py-10 px-4">
@@ -1581,6 +1598,30 @@ export function WikiPage() {
                                     </div>
                                   )}
                                 </Draggable>
+                                {/* Drop zone: drag onto this entry to make it a sub-entry */}
+                                <Droppable droppableId={`onto-${entry.id}`}>
+                                  {(ontoProv, ontoSnap) => (
+                                    <div
+                                      ref={ontoProv.innerRef}
+                                      {...ontoProv.droppableProps}
+                                      className={`transition-all duration-150 overflow-hidden mx-2 rounded ${
+                                        isDragging && draggingId !== entry.id
+                                          ? ontoSnap.isDraggingOver
+                                            ? 'h-6 mb-1 bg-amber-100 dark:bg-amber-900/50 border border-amber-300 dark:border-amber-700'
+                                            : 'h-5 mb-0.5 bg-gray-50 dark:bg-gray-800/60 border border-dashed border-gray-200 dark:border-gray-700'
+                                          : 'h-0'
+                                      }`}
+                                    >
+                                      {isDragging && draggingId !== entry.id && (
+                                        <span className="flex items-center justify-center h-full gap-1 text-[10px] leading-none text-gray-400 dark:text-gray-500">
+                                          <Layers className="w-2.5 h-2.5" />
+                                          {ontoSnap.isDraggingOver ? 'Soltar para criar subentrada' : 'subentrada'}
+                                        </span>
+                                      )}
+                                      {ontoProv.placeholder}
+                                    </div>
+                                  )}
+                                </Droppable>
                                 {subEntries.map(child => (
                                   <button
                                     key={child.id}
@@ -1665,7 +1706,6 @@ export function WikiPage() {
               entry={selected}
               onEdit={() => setEditingId(selected.id)}
               onDelete={() => handleDelete(selected.id)}
-              onNewChild={() => handleNew(selected.id)}
               onNavigate={id => selectEntry(id)}
               onRestore={updated => {
                 queryClient.setQueryData(['wiki'], (prev: WikiEntry[] = []) =>
