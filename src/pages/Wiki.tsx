@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   BookText, Plus, Trash2, Edit2, X, Link2, ImagePlus,
@@ -868,6 +868,180 @@ function WikiViewer({ entry, onEdit, onDelete, onRestore }: {
   )
 }
 
+// ─── Section banners (abstract wave patterns) ────────────────────────────
+
+const SECTION_BANNERS: Array<(uid: string) => React.ReactElement> = [
+  // 0 – Amber + Ocean Blue
+  (u) => (
+    <svg viewBox="0 0 1200 64" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice" width="100%" height="100%">
+      <defs>
+        <linearGradient id={`${u}a`} x1="0" y1="0" x2="1200" y2="0" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#fbbf24"/><stop offset="100%" stopColor="#d97706"/>
+        </linearGradient>
+        <linearGradient id={`${u}b`} x1="1200" y1="0" x2="600" y2="64" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#1e40af"/><stop offset="100%" stopColor="#3b82f6"/>
+        </linearGradient>
+      </defs>
+      <rect width="1200" height="64" fill={`url(#${u}a)`}/>
+      <path d="M 1200 0 C 920 0 780 45 600 64 L 1200 64 Z" fill={`url(#${u}b)`}/>
+      <path d="M 1200 0 C 1060 12 930 4 830 0 Z" fill="white" fillOpacity="0.35"/>
+    </svg>
+  ),
+  // 1 – Amber + Teal
+  (u) => (
+    <svg viewBox="0 0 1200 64" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice" width="100%" height="100%">
+      <defs>
+        <linearGradient id={`${u}a`} x1="0" y1="0" x2="1200" y2="0" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#f59e0b"/><stop offset="100%" stopColor="#b45309"/>
+        </linearGradient>
+        <linearGradient id={`${u}b`} x1="1200" y1="0" x2="530" y2="64" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#0f766e"/><stop offset="100%" stopColor="#14b8a6"/>
+        </linearGradient>
+      </defs>
+      <rect width="1200" height="64" fill={`url(#${u}a)`}/>
+      <path d="M 1200 0 C 880 5 720 52 530 64 L 1200 64 Z" fill={`url(#${u}b)`}/>
+      <path d="M 1200 0 C 1070 10 940 3 840 0 Z" fill="#67e8f9" fillOpacity="0.45"/>
+    </svg>
+  ),
+  // 2 – Amber + Violet
+  (u) => (
+    <svg viewBox="0 0 1200 64" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice" width="100%" height="100%">
+      <defs>
+        <linearGradient id={`${u}a`} x1="0" y1="0" x2="1200" y2="0" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#fcd34d"/><stop offset="100%" stopColor="#f59e0b"/>
+        </linearGradient>
+        <linearGradient id={`${u}b`} x1="0" y1="64" x2="600" y2="0" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#6d28d9"/><stop offset="100%" stopColor="#8b5cf6"/>
+        </linearGradient>
+      </defs>
+      <rect width="1200" height="64" fill={`url(#${u}a)`}/>
+      <path d="M 0 64 C 200 64 380 10 600 0 L 0 0 Z" fill={`url(#${u}b)`}/>
+      <path d="M 0 64 C 120 55 240 64 380 64 Z" fill="#c4b5fd" fillOpacity="0.5"/>
+    </svg>
+  ),
+  // 3 – Amber + Indigo
+  (u) => (
+    <svg viewBox="0 0 1200 64" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice" width="100%" height="100%">
+      <defs>
+        <linearGradient id={`${u}a`} x1="0" y1="0" x2="1200" y2="0" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#fde68a"/><stop offset="100%" stopColor="#f59e0b"/>
+        </linearGradient>
+        <linearGradient id={`${u}b`} x1="1200" y1="64" x2="580" y2="0" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#312e81"/><stop offset="100%" stopColor="#4f46e5"/>
+        </linearGradient>
+      </defs>
+      <rect width="1200" height="64" fill={`url(#${u}a)`}/>
+      <path d="M 1200 64 C 950 64 780 8 580 0 L 1200 0 Z" fill={`url(#${u}b)`}/>
+      <path d="M 1200 64 C 1060 55 940 64 800 64 Z" fill="#a5b4fc" fillOpacity="0.45"/>
+    </svg>
+  ),
+  // 4 – Amber + Rose
+  (u) => (
+    <svg viewBox="0 0 1200 64" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice" width="100%" height="100%">
+      <defs>
+        <linearGradient id={`${u}a`} x1="0" y1="0" x2="1200" y2="0" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#fcd34d"/><stop offset="100%" stopColor="#f59e0b"/>
+        </linearGradient>
+        <linearGradient id={`${u}b`} x1="0" y1="0" x2="680" y2="64" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#9f1239"/><stop offset="100%" stopColor="#f43f5e"/>
+        </linearGradient>
+      </defs>
+      <rect width="1200" height="64" fill={`url(#${u}a)`}/>
+      <path d="M 0 0 C 280 0 430 64 680 64 L 0 64 Z" fill={`url(#${u}b)`}/>
+      <path d="M 0 0 C 170 12 310 2 440 0 Z" fill="#fda4af" fillOpacity="0.5"/>
+    </svg>
+  ),
+  // 5 – Amber + Cobalt
+  (u) => (
+    <svg viewBox="0 0 1200 64" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice" width="100%" height="100%">
+      <defs>
+        <linearGradient id={`${u}a`} x1="0" y1="0" x2="1200" y2="0" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#fef3c7"/><stop offset="50%" stopColor="#fbbf24"/><stop offset="100%" stopColor="#d97706"/>
+        </linearGradient>
+        <linearGradient id={`${u}b`} x1="1200" y1="0" x2="700" y2="64" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#1e3a8a"/><stop offset="100%" stopColor="#2563eb"/>
+        </linearGradient>
+      </defs>
+      <rect width="1200" height="64" fill={`url(#${u}a)`}/>
+      <path d="M 1200 0 C 960 10 840 38 700 64 L 1200 64 Z" fill={`url(#${u}b)`}/>
+      <path d="M 1200 0 C 1100 8 980 0 880 0 Z" fill="#bfdbfe" fillOpacity="0.6"/>
+    </svg>
+  ),
+  // 6 – Amber + Forest Green
+  (u) => (
+    <svg viewBox="0 0 1200 64" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice" width="100%" height="100%">
+      <defs>
+        <linearGradient id={`${u}a`} x1="0" y1="0" x2="1200" y2="0" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#fbbf24"/><stop offset="100%" stopColor="#d97706"/>
+        </linearGradient>
+        <linearGradient id={`${u}b`} x1="0" y1="64" x2="800" y2="0" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#14532d"/><stop offset="100%" stopColor="#16a34a"/>
+        </linearGradient>
+      </defs>
+      <rect width="1200" height="64" fill={`url(#${u}a)`}/>
+      <path d="M 0 64 C 320 64 530 5 800 0 L 0 0 Z" fill={`url(#${u}b)`}/>
+      <path d="M 0 64 C 200 58 360 64 520 64 Z" fill="#86efac" fillOpacity="0.5"/>
+    </svg>
+  ),
+  // 7 – Amber + Deep Purple/Pink
+  (u) => (
+    <svg viewBox="0 0 1200 64" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice" width="100%" height="100%">
+      <defs>
+        <linearGradient id={`${u}a`} x1="0" y1="0" x2="1200" y2="0" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#fcd34d"/><stop offset="100%" stopColor="#fbbf24"/>
+        </linearGradient>
+        <linearGradient id={`${u}b`} x1="1200" y1="0" x2="650" y2="64" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#4a044e"/><stop offset="100%" stopColor="#9333ea"/>
+        </linearGradient>
+      </defs>
+      <rect width="1200" height="64" fill={`url(#${u}a)`}/>
+      <path d="M 1200 0 C 1000 0 820 32 650 64 L 1200 64 Z" fill={`url(#${u}b)`}/>
+      <path d="M 1200 0 C 1090 14 970 5 870 0 Z" fill="#f0abfc" fillOpacity="0.5"/>
+    </svg>
+  ),
+  // 8 – Amber + Coral
+  (u) => (
+    <svg viewBox="0 0 1200 64" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice" width="100%" height="100%">
+      <defs>
+        <linearGradient id={`${u}a`} x1="0" y1="0" x2="1200" y2="0" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#f59e0b"/><stop offset="100%" stopColor="#92400e"/>
+        </linearGradient>
+        <linearGradient id={`${u}b`} x1="0" y1="0" x2="610" y2="64" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#c2410c"/><stop offset="100%" stopColor="#f97316"/>
+        </linearGradient>
+      </defs>
+      <rect width="1200" height="64" fill={`url(#${u}a)`}/>
+      <path d="M 0 0 C 230 0 370 58 610 64 L 0 64 Z" fill={`url(#${u}b)`}/>
+      <path d="M 0 0 C 160 12 300 2 440 0 Z" fill="#fed7aa" fillOpacity="0.6"/>
+    </svg>
+  ),
+  // 9 – Amber + Emerald
+  (u) => (
+    <svg viewBox="0 0 1200 64" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice" width="100%" height="100%">
+      <defs>
+        <linearGradient id={`${u}a`} x1="0" y1="0" x2="1200" y2="0" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#fde68a"/><stop offset="100%" stopColor="#fbbf24"/>
+        </linearGradient>
+        <linearGradient id={`${u}b`} x1="0" y1="64" x2="820" y2="0" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#064e3b"/><stop offset="100%" stopColor="#059669"/>
+        </linearGradient>
+      </defs>
+      <rect width="1200" height="64" fill={`url(#${u}a)`}/>
+      <path d="M 0 64 C 350 64 560 0 820 0 L 0 0 Z" fill={`url(#${u}b)`}/>
+      <path d="M 0 64 C 230 56 400 64 560 64 Z" fill="#6ee7b7" fillOpacity="0.5"/>
+    </svg>
+  ),
+]
+
+function SectionBanner({ section, fallbackIdx = 0 }: { section: WikiSection; fallbackIdx?: number }) {
+  const idx = (section.banner !== undefined ? section.banner : fallbackIdx) % SECTION_BANNERS.length
+  return (
+    <div className="h-12 rounded-xl overflow-hidden mb-3" aria-hidden="true">
+      {SECTION_BANNERS[idx](section.id)}
+    </div>
+  )
+}
+
 // ─── Table of Contents (home view) ───────────────────────────────────────
 
 const HEADING_INDENT: Record<number, string> = {
@@ -953,15 +1127,18 @@ function WikiToc({ entries, sections, onSelectEntry, onNew }: {
           </div>
         ) : hasSections ? (
           <div className="space-y-8">
-            {groups.map(({ section, id, items }) => {
+            {groups.map(({ section, id, items }, groupIdx) => {
               const start = globalIdx
               globalIdx += items.length
               return (
                 <section key={id}>
                   {section && (
-                    <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-3 pb-1 border-b border-gray-100 dark:border-gray-800">
-                      {section.name}
-                    </h2>
+                    <>
+                      <SectionBanner section={section} fallbackIdx={groupIdx} />
+                      <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-3 pb-1 border-b border-gray-100 dark:border-gray-800">
+                        {section.name}
+                      </h2>
+                    </>
                   )}
                   {!section && hasSections && (
                     <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-3 pb-1 border-b border-gray-100 dark:border-gray-800">
@@ -1003,7 +1180,11 @@ function SectionsDialog({ sections, onClose, onSave }: {
   function addSection() {
     const name = newName.trim()
     if (!name) return
-    setList(prev => [...prev, { id: generateId(), name, order: prev.length }])
+    setList(prev => {
+      const lastBanner = prev.length > 0 ? (prev[prev.length - 1].banner ?? prev.length - 1) : -1
+      const nextBanner = (lastBanner + 1) % SECTION_BANNERS.length
+      return [...prev, { id: generateId(), name, order: prev.length, banner: nextBanner }]
+    })
     setNewName('')
   }
 

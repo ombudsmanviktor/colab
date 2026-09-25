@@ -191,6 +191,7 @@ export interface WikiSection {
   id: string
   name: string
   order: number
+  banner?: number
 }
 
 export interface WikiEntry {
