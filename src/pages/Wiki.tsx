@@ -1,11 +1,11 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, Fragment } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   BookText, Plus, Trash2, Edit2, X, Link2, ImagePlus,
   Bold, Italic, Strikethrough, Heading1, Heading2, Heading3,
   List, ListOrdered, Quote, Code, Minus, Download, Upload,
   Search, ChevronLeft, FilePlus, GripVertical, History,
-  Settings, ChevronUp, ChevronDown, FolderPlus,
+  Settings, ChevronUp, ChevronDown, FolderPlus, Hash, Layers,
 } from 'lucide-react'
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd'
 import ReactMarkdown from 'react-markdown'
@@ -296,6 +296,54 @@ function LinkDialog({ initialText, onInsert, onClose }: {
   )
 }
 
+// ─── Entry Picker Dialog (internal links) ────────────────────────────────
+
+function EntryPickerDialog({ entries, onInsert, onClose }: {
+  entries: WikiEntry[]
+  onInsert: (id: string, title: string) => void
+  onClose: () => void
+}) {
+  const [q, setQ] = useState('')
+  const filtered = entries
+    .filter(e => e.title.toLowerCase().includes(q.toLowerCase()))
+    .slice(0, 20)
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={onClose}>
+      <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 p-5 w-80 space-y-3" onClick={e => e.stopPropagation()}>
+        <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 flex items-center gap-2">
+          <Hash className="w-4 h-4 text-amber-500" /> Link para verbete
+        </p>
+        <Input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar verbete…" autoFocus />
+        <ul className="max-h-52 overflow-y-auto space-y-0.5">
+          {filtered.map(e => (
+            <li key={e.id}>
+              <button
+                onClick={() => { onInsert(e.id, e.title); onClose() }}
+                className="w-full text-left px-3 py-2 rounded-lg text-sm hover:bg-amber-50 dark:hover:bg-amber-950/30 text-gray-700 dark:text-gray-300 transition-colors"
+              >
+                {e.title}
+                {e.description && <span className="block text-xs text-gray-400 truncate">{e.description}</span>}
+              </button>
+            </li>
+          ))}
+          {filtered.length === 0 && (
+            <li className="text-xs text-gray-400 text-center py-4">Nenhum verbete encontrado</li>
+          )}
+        </ul>
+        <div className="flex justify-end">
+          <Button variant="outline" size="sm" onClick={onClose}>Cancelar</Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Convert [[id|Title]] wiki-link syntax to markdown [Title](wiki://id)
+function processWikiLinks(content: string): string {
+  return content.replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, (_, id, title) => `[${title}](wiki://${id})`)
+}
+
 // ─── Toolbar ──────────────────────────────────────────────────────────────
 
 const SEP = '|'
@@ -316,13 +364,15 @@ const TOOLS: Array<{ id: string; icon?: React.ElementType; label?: string; title
   { id: 'code',    icon: Code,  title: 'Código' },
   { id: 'divider', icon: Minus, title: 'Divisor' },
   SEP,
-  { id: 'link',  icon: Link2,     title: 'Inserir link' },
-  { id: 'image', icon: ImagePlus, title: 'Inserir imagem' },
+  { id: 'link',     icon: Link2,     title: 'Inserir link externo' },
+  { id: 'wikilink', icon: Hash,      title: 'Link para verbete' },
+  { id: 'image',    icon: ImagePlus, title: 'Inserir imagem' },
 ]
 
-function Toolbar({ onApply, onLinkClick, onImageClick }: {
+function Toolbar({ onApply, onLinkClick, onWikiLinkClick, onImageClick }: {
   onApply: (action: string) => void
   onLinkClick: () => void
+  onWikiLinkClick: () => void
   onImageClick: () => void
 }) {
   function handleKey(e: React.KeyboardEvent) {
@@ -341,6 +391,7 @@ function Toolbar({ onApply, onLinkClick, onImageClick }: {
         if (t === SEP) return <div key={i} className="w-px h-4 bg-gray-200 dark:bg-gray-700 mx-1" />
         const Icon = t.icon
         const isLink = t.id === 'link'
+        const isWikiLink = t.id === 'wikilink'
         const isImg = t.id === 'image'
         return (
           <button
@@ -349,8 +400,9 @@ function Toolbar({ onApply, onLinkClick, onImageClick }: {
             type="button"
             onMouseDown={e => {
               e.preventDefault()
-              if (isLink) { onLinkClick(); return }
-              if (isImg)  { onImageClick(); return }
+              if (isLink)     { onLinkClick(); return }
+              if (isWikiLink) { onWikiLinkClick(); return }
+              if (isImg)      { onImageClick(); return }
               onApply(t.id)
             }}
             className="p-1.5 rounded hover:bg-amber-100 dark:hover:bg-amber-900/40 text-gray-500 dark:text-gray-400 hover:text-amber-700 dark:hover:text-amber-300 transition-colors"
@@ -365,9 +417,10 @@ function Toolbar({ onApply, onLinkClick, onImageClick }: {
 
 // ─── Wiki Editor ──────────────────────────────────────────────────────────
 
-function WikiEditor({ entry, sections, onSave, onCancel, isNew }: {
+function WikiEditor({ entry, sections, entries, onSave, onCancel, isNew }: {
   entry: WikiEntry
   sections: WikiSection[]
+  entries: WikiEntry[]
   onSave: (e: WikiEntry) => Promise<void>
   onCancel: () => void
   isNew: boolean
@@ -378,6 +431,7 @@ function WikiEditor({ entry, sections, onSave, onCancel, isNew }: {
   const [content, setContent] = useState(entry.content)
   const [saving, setSaving] = useState(false)
   const [showLink, setShowLink] = useState(false)
+  const [showWikiLink, setShowWikiLink] = useState(false)
   const [linkInitialText, setLinkInitialText] = useState('')
   const [mobileTab, setMobileTab] = useState<'edit' | 'preview'>('edit')
   const taRef = useRef<HTMLTextAreaElement>(null)
@@ -416,6 +470,22 @@ function WikiEditor({ entry, sections, onSave, onCancel, isNew }: {
     const { value, sel } = insertTextAtCursor(ta, `[${text}](${url})`)
     setContent(value)
     pendingSel.current = sel
+  }
+
+  function insertWikiLink(id: string, entryTitle: string) {
+    const ta = taRef.current
+    if (!ta) return
+    const sel = ta.value.slice(ta.selectionStart, ta.selectionEnd)
+    const label = sel.trim() || entryTitle
+    const { value, cursor } = (() => {
+      const v = ta.value
+      const s = ta.selectionStart
+      const e = ta.selectionEnd
+      const ins = `[[${id}|${label}]]`
+      return { value: v.slice(0, s) + ins + v.slice(e), cursor: s + ins.length }
+    })()
+    setContent(value)
+    pendingSel.current = [cursor, cursor]
   }
 
   async function handleImageFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -516,6 +586,7 @@ function WikiEditor({ entry, sections, onSave, onCancel, isNew }: {
         <Toolbar
           onApply={applyFmt}
           onLinkClick={openLink}
+          onWikiLinkClick={() => setShowWikiLink(true)}
           onImageClick={() => imgInputRef.current?.click()}
         />
       </div>
@@ -561,6 +632,13 @@ function WikiEditor({ entry, sections, onSave, onCancel, isNew }: {
           initialText={linkInitialText}
           onInsert={insertLink}
           onClose={() => setShowLink(false)}
+        />
+      )}
+      {showWikiLink && (
+        <EntryPickerDialog
+          entries={entries.filter(e => e.id !== entry.id)}
+          onInsert={insertWikiLink}
+          onClose={() => setShowWikiLink(false)}
         />
       )}
     </div>
@@ -785,14 +863,17 @@ const wikiHeadingComponents = {
 
 // ─── Wiki Viewer ──────────────────────────────────────────────────────────
 
-function WikiViewer({ entry, onEdit, onDelete, onRestore }: {
+function WikiViewer({ entry, onEdit, onDelete, onRestore, onNewChild, onNavigate }: {
   entry: WikiEntry
   onEdit: () => void
   onDelete: () => void
   onRestore: (updated: WikiEntry) => void
+  onNewChild: () => void
+  onNavigate: (id: string) => void
 }) {
   const [showHistory, setShowHistory] = useState(false)
   const headings = extractHeadings(entry.content)
+  const processedContent = processWikiLinks(entry.content)
 
   function handleExport() {
     const md = `# ${entry.title}\n\n${entry.content}`
@@ -817,6 +898,14 @@ function WikiViewer({ entry, onEdit, onDelete, onRestore }: {
       <div className="flex items-start justify-between px-6 pt-5 pb-3 border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex-1 min-w-0 pr-4">{entry.title}</h1>
         <div className="flex items-center gap-2 flex-shrink-0">
+          <button
+            onClick={onNewChild}
+            title="Nova subentrada"
+            className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs text-gray-400 hover:text-amber-600 dark:hover:text-amber-400 bg-gray-100 dark:bg-gray-800 hover:bg-amber-50 dark:hover:bg-amber-900/30 transition-colors"
+          >
+            <Layers className="w-3 h-3" />
+            Subentrada
+          </button>
           <button
             onClick={() => setShowHistory(true)}
             title="Histórico de versões"
@@ -854,9 +943,22 @@ function WikiViewer({ entry, onEdit, onDelete, onRestore }: {
                 components={{
                   img: ({ src, alt }) => <WikiImage src={src} alt={alt} />,
                   ...wikiHeadingComponents,
+                  a: ({ href, children }) => {
+                    if (href?.startsWith('wiki://')) {
+                      return (
+                        <button
+                          onClick={() => onNavigate(href.slice(7))}
+                          className="text-amber-600 dark:text-amber-400 hover:underline font-medium not-italic"
+                        >
+                          {children}
+                        </button>
+                      )
+                    }
+                    return <a href={safeUrl(href ?? '')} target="_blank" rel="noopener noreferrer">{children}</a>
+                  },
                 }}
               >
-                {entry.content}
+                {processedContent}
               </ReactMarkdown>
             </div>
           </>
@@ -876,9 +978,17 @@ const HEADING_INDENT: Record<number, string> = {
   3: 'pl-6',
 }
 
-function WikiTocEntry({ entry, idx, onSelectEntry }: { entry: WikiEntry; idx: number; onSelectEntry: (id: string) => void }) {
+function WikiTocEntry({ entry, idx, onSelectEntry, allEntries, depth = 0 }: {
+  entry: WikiEntry
+  idx: number
+  onSelectEntry: (id: string) => void
+  allEntries: WikiEntry[]
+  depth?: number
+}) {
   const headings = extractHeadings(entry.content)
   const [expanded, setExpanded] = useState(false)
+  const children = allEntries.filter(e => e.parentId === entry.id).sort((a, b) => a.order - b.order)
+
   return (
     <li>
       <div className="flex items-center gap-1">
@@ -890,7 +1000,7 @@ function WikiTocEntry({ entry, idx, onSelectEntry }: { entry: WikiEntry; idx: nu
             {idx + 1}.
           </span>
           <span className="flex-1 min-w-0">
-            <span className="text-sm font-semibold text-amber-700 dark:text-amber-400 group-hover:underline">
+            <span className={`font-semibold group-hover:underline ${depth === 0 ? 'text-sm text-amber-700 dark:text-amber-400' : 'text-xs text-amber-600 dark:text-amber-500'}`}>
               {entry.title}
             </span>
             {entry.description && (
@@ -922,6 +1032,20 @@ function WikiTocEntry({ entry, idx, onSelectEntry }: { entry: WikiEntry; idx: nu
           ))}
         </ul>
       )}
+      {children.length > 0 && (
+        <ul className="mt-1 mb-1 space-y-1 border-l-2 border-amber-100 dark:border-amber-900/30 ml-7 pl-3">
+          {children.map((child, ci) => (
+            <WikiTocEntry
+              key={child.id}
+              entry={child}
+              idx={ci}
+              onSelectEntry={onSelectEntry}
+              allEntries={allEntries}
+              depth={depth + 1}
+            />
+          ))}
+        </ul>
+      )}
     </li>
   )
 }
@@ -932,7 +1056,8 @@ function WikiToc({ entries, sections, onSelectEntry, onNew }: {
   onSelectEntry: (id: string) => void
   onNew: () => void
 }) {
-  const groups = groupBySections(entries, sections)
+  const topLevel = entries.filter(e => !e.parentId)
+  const groups = groupBySections(topLevel, sections)
   const hasSections = groups.some(g => g.section !== null)
 
   return (
@@ -968,7 +1093,7 @@ function WikiToc({ entries, sections, onSelectEntry, onNew }: {
                   )}
                   <ol className="space-y-2">
                     {items.map((entry, i) => (
-                      <WikiTocEntry key={entry.id} entry={entry} idx={i} onSelectEntry={onSelectEntry} />
+                      <WikiTocEntry key={entry.id} entry={entry} idx={i} onSelectEntry={onSelectEntry} allEntries={entries} />
                     ))}
                   </ol>
                 </section>
@@ -977,8 +1102,8 @@ function WikiToc({ entries, sections, onSelectEntry, onNew }: {
           </div>
         ) : (
           <ol className="space-y-3">
-            {entries.map((entry, i) => (
-              <WikiTocEntry key={entry.id} entry={entry} idx={i} onSelectEntry={onSelectEntry} />
+            {topLevel.map((entry, i) => (
+              <WikiTocEntry key={entry.id} entry={entry} idx={i} onSelectEntry={onSelectEntry} allEntries={entries} />
             ))}
           </ol>
         )}
@@ -1109,8 +1234,9 @@ export function WikiPage() {
   const [showSections, setShowSections] = useState(false)
   const importRef = useRef<HTMLInputElement>(null)
 
-  // sorted within sections: primary sort by section order, secondary by entry order
-  const groups = groupBySections(entries, sections)
+  // sorted within sections: only top-level entries; sub-entries rendered nested
+  const topLevelEntries = entries.filter(e => !e.parentId)
+  const groups = groupBySections(topLevelEntries, sections)
   const sorted = groups.flatMap(g => g.items)
   const filtered = (search
     ? entries.filter(e =>
@@ -1142,17 +1268,20 @@ export function WikiPage() {
     }
   }
 
-  function handleNew() {
+  function handleNew(parentId?: string) {
     const now = new Date().toISOString()
-    const inheritedCategory = selected?.category
-    const sectionGroup = groups.find(g => g.items.some(e => e.id === selected?.id))
-    const sectionOrder = sectionGroup ? sectionGroup.items.length : entries.length
+    const parentEntry = parentId ? entries.find(e => e.id === parentId) : null
+    const inheritedCategory = parentEntry?.category ?? selected?.category
+    const order = parentId
+      ? entries.filter(e => e.parentId === parentId).length
+      : (groups.find(g => g.items.some(e => e.id === selected?.id))?.items.length ?? topLevelEntries.length)
     const newEntry: WikiEntry = {
       id: generateId(),
       title: 'Nova entrada',
       content: '',
       category: inheritedCategory,
-      order: sectionOrder,
+      parentId: parentId,
+      order,
       created_at: now,
       updated_at: now,
       created_by: session?.email ?? '',
@@ -1189,11 +1318,14 @@ export function WikiPage() {
 
   async function handleDelete(id: string) {
     const entry = entries.find(e => e.id === id)
+    const children = entries.filter(e => e.parentId === id)
     try {
       await deleteWikiEntry(id)
-      queryClient.setQueryData(['wiki'], (prev: WikiEntry[] = []) => prev.filter(e => e.id !== id))
-      if (selectedId === id) { setSelectedId(null); setShowMobileEntry(false) }
-      toast({ title: 'Entrada removida' })
+      await Promise.all(children.map(c => deleteWikiEntry(c.id)))
+      const idsToRemove = new Set([id, ...children.map(c => c.id)])
+      queryClient.setQueryData(['wiki'], (prev: WikiEntry[] = []) => prev.filter(e => !idsToRemove.has(e.id)))
+      if (selectedId && idsToRemove.has(selectedId)) { setSelectedId(null); setShowMobileEntry(false) }
+      toast({ title: children.length > 0 ? `Entrada e ${children.length} subentrada(s) removidas` : 'Entrada removida' })
       if (entry) logActivity({ actor: session?.email ?? '', module: 'Wiki', action: 'delete', description: `${session?.email} removeu a entrada "${entry.title}" do Wiki` })
     } catch {
       toast({ title: 'Erro ao remover', variant: 'destructive' })
@@ -1341,7 +1473,7 @@ export function WikiPage() {
                 className="p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 transition-colors">
                 <Upload className="w-3.5 h-3.5" />
               </button>
-              <button onClick={handleNew} title="Nova entrada"
+              <button onClick={() => handleNew()} title="Nova entrada"
                 className="p-1.5 rounded hover:bg-amber-100 dark:hover:bg-amber-900/40 text-amber-500 hover:text-amber-700 transition-colors">
                 <FilePlus className="w-3.5 h-3.5" />
               </button>
@@ -1391,7 +1523,7 @@ export function WikiPage() {
                   <div className="text-center py-10 px-4">
                     <BookText className="w-8 h-8 text-gray-200 dark:text-gray-700 mx-auto mb-2" />
                     <p className="text-xs text-gray-400 dark:text-gray-600">Nenhuma entrada ainda</p>
-                    <button onClick={handleNew} className="mt-3 flex items-center gap-1.5 text-xs text-amber-500 hover:text-amber-700 mx-auto">
+                    <button onClick={() => handleNew()} className="mt-3 flex items-center gap-1.5 text-xs text-amber-500 hover:text-amber-700 mx-auto">
                       <Plus className="w-3.5 h-3.5" /> Criar primeira entrada
                     </button>
                   </div>
@@ -1413,40 +1545,65 @@ export function WikiPage() {
                     <Droppable droppableId={id}>
                       {provided => (
                         <div ref={provided.innerRef} {...provided.droppableProps} className="min-h-[4px]">
-                          {items.map((entry, index) => (
-                            <Draggable key={entry.id} draggableId={entry.id} index={index}>
-                              {(prov, snap) => (
-                                <div
-                                  ref={prov.innerRef}
-                                  {...prov.draggableProps}
-                                  className={`flex items-center border-l-2 transition-colors ${
-                                    selectedId === entry.id
-                                      ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/40'
-                                      : 'border-transparent hover:bg-white dark:hover:bg-gray-800/60'
-                                  } ${snap.isDragging ? 'opacity-75 shadow-md rounded-r-lg' : ''}`}
-                                >
-                                  <div
-                                    {...prov.dragHandleProps}
-                                    className="pl-2 pr-1 py-2.5 text-gray-300 hover:text-gray-400 cursor-grab active:cursor-grabbing flex-shrink-0 touch-none"
-                                  >
-                                    <GripVertical className="w-3.5 h-3.5" />
-                                  </div>
+                          {items.map((entry, index) => {
+                            const subEntries = entries.filter(e => e.parentId === entry.id).sort((a, b) => a.order - b.order)
+                            return (
+                              <Fragment key={entry.id}>
+                                <Draggable draggableId={entry.id} index={index}>
+                                  {(prov, snap) => (
+                                    <div
+                                      ref={prov.innerRef}
+                                      {...prov.draggableProps}
+                                      className={`flex items-center border-l-2 transition-colors ${
+                                        selectedId === entry.id
+                                          ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/40'
+                                          : 'border-transparent hover:bg-white dark:hover:bg-gray-800/60'
+                                      } ${snap.isDragging ? 'opacity-75 shadow-md rounded-r-lg' : ''}`}
+                                    >
+                                      <div
+                                        {...prov.dragHandleProps}
+                                        className="pl-2 pr-1 py-2.5 text-gray-300 hover:text-gray-400 cursor-grab active:cursor-grabbing flex-shrink-0 touch-none"
+                                      >
+                                        <GripVertical className="w-3.5 h-3.5" />
+                                      </div>
+                                      <button
+                                        onClick={() => selectEntry(entry.id)}
+                                        className="flex-1 text-left py-2.5 pr-4 min-w-0"
+                                      >
+                                        <p className={`text-sm font-medium truncate ${
+                                          selectedId === entry.id
+                                            ? 'text-amber-700 dark:text-amber-300'
+                                            : 'text-gray-700 dark:text-gray-300'
+                                        }`}>
+                                          {entry.title}
+                                        </p>
+                                      </button>
+                                    </div>
+                                  )}
+                                </Draggable>
+                                {subEntries.map(child => (
                                   <button
-                                    onClick={() => selectEntry(entry.id)}
-                                    className="flex-1 text-left py-2.5 pr-4 min-w-0"
+                                    key={child.id}
+                                    onClick={() => selectEntry(child.id)}
+                                    className={`w-full text-left pl-9 pr-4 py-1.5 border-l-2 transition-colors flex items-center gap-1.5 ${
+                                      selectedId === child.id
+                                        ? 'border-amber-400 bg-amber-50 dark:bg-amber-950/40'
+                                        : 'border-transparent hover:bg-white dark:hover:bg-gray-800/60'
+                                    }`}
                                   >
-                                    <p className={`text-sm font-medium truncate ${
-                                      selectedId === entry.id
-                                        ? 'text-amber-700 dark:text-amber-300'
-                                        : 'text-gray-700 dark:text-gray-300'
+                                    <Layers className="w-3 h-3 flex-shrink-0 text-amber-300 dark:text-amber-700" />
+                                    <span className={`text-xs truncate ${
+                                      selectedId === child.id
+                                        ? 'text-amber-700 dark:text-amber-300 font-medium'
+                                        : 'text-gray-500 dark:text-gray-400'
                                     }`}>
-                                      {entry.title}
-                                    </p>
+                                      {child.title}
+                                    </span>
                                   </button>
-                                </div>
-                              )}
-                            </Draggable>
-                          ))}
+                                ))}
+                              </Fragment>
+                            )
+                          })}
                           {provided.placeholder}
                         </div>
                       )}
@@ -1485,7 +1642,7 @@ export function WikiPage() {
 
           {/* Sidebar footer */}
           <div className="px-4 py-3 border-t border-gray-100 dark:border-gray-800 flex-shrink-0">
-            <button onClick={handleNew}
+            <button onClick={() => handleNew()}
               className="w-full flex items-center gap-2 text-xs text-gray-500 dark:text-gray-500 hover:text-amber-600 dark:hover:text-amber-400 transition-colors">
               <Plus className="w-3.5 h-3.5" /> Nova entrada
             </button>
@@ -1498,6 +1655,7 @@ export function WikiPage() {
             <WikiEditor
               entry={editingEntry}
               sections={sections}
+              entries={entries}
               onSave={handleSave}
               onCancel={() => handleCancel(editingEntry.id)}
               isNew={editingEntry.title === 'Nova entrada' && !editingEntry.content}
@@ -1507,6 +1665,8 @@ export function WikiPage() {
               entry={selected}
               onEdit={() => setEditingId(selected.id)}
               onDelete={() => handleDelete(selected.id)}
+              onNewChild={() => handleNew(selected.id)}
+              onNavigate={id => selectEntry(id)}
               onRestore={updated => {
                 queryClient.setQueryData(['wiki'], (prev: WikiEntry[] = []) =>
                   prev.map(e => e.id === updated.id ? updated : e)

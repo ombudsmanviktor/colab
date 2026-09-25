@@ -199,6 +199,7 @@ export interface WikiEntry {
   content: string
   category?: string
   description?: string
+  parentId?: string
   created_at: string
   updated_at: string
   created_by: string
