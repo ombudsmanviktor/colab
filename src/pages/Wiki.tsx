@@ -144,6 +144,26 @@ function extractHeadings(content: string): { level: number; text: string }[] {
     })
 }
 
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '-')
+}
+
+function childText(node: React.ReactNode): string {
+  if (typeof node === 'string') return node
+  if (typeof node === 'number') return String(node)
+  if (Array.isArray(node)) return node.map(childText).join('')
+  if (node && typeof node === 'object' && 'props' in (node as object)) {
+    return childText((node as React.ReactElement<{ children?: React.ReactNode }>).props.children)
+  }
+  return ''
+}
+
 // ─── Image with download button ───────────────────────────────────────────
 
 const MIME_EXT: Record<string, string> = {
@@ -706,6 +726,63 @@ function HistoryDialog({ entry, onClose, onRestored }: {
   )
 }
 
+// ─── In-article TOC ───────────────────────────────────────────────────────
+
+function ArticleToc({ headings }: { headings: { level: number; text: string }[] }) {
+  const [open, setOpen] = useState(true)
+  if (headings.length < 2) return null
+
+  function scrollTo(text: string) {
+    const id = `wiki-h-${slugify(text)}`
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  return (
+    <div className="mb-6 border border-gray-100 dark:border-gray-800 rounded-lg overflow-hidden text-sm not-prose">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-800/60 text-xs font-semibold text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+      >
+        <span className="flex items-center gap-1.5">
+          <List className="w-3 h-3" />
+          Conteúdo
+        </span>
+        {open ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+      </button>
+      {open && (
+        <nav className="px-3 py-2 space-y-1">
+          {headings.map((h, i) => (
+            <button
+              key={i}
+              onClick={() => scrollTo(h.text)}
+              style={{ paddingLeft: `${(h.level - 1) * 12}px` }}
+              className="block text-left text-xs text-amber-700 dark:text-amber-400 hover:underline leading-snug"
+            >
+              {h.text}
+            </button>
+          ))}
+        </nav>
+      )}
+    </div>
+  )
+}
+
+// Heading components that inject scroll-target IDs
+const wikiHeadingComponents = {
+  h1: ({ children }: { children?: React.ReactNode }) => {
+    const id = `wiki-h-${slugify(childText(children))}`
+    return <h1 id={id}>{children}</h1>
+  },
+  h2: ({ children }: { children?: React.ReactNode }) => {
+    const id = `wiki-h-${slugify(childText(children))}`
+    return <h2 id={id}>{children}</h2>
+  },
+  h3: ({ children }: { children?: React.ReactNode }) => {
+    const id = `wiki-h-${slugify(childText(children))}`
+    return <h3 id={id}>{children}</h3>
+  },
+}
+
 // ─── Wiki Viewer ──────────────────────────────────────────────────────────
 
 function WikiViewer({ entry, onEdit, onDelete, onRestore }: {
@@ -715,6 +792,7 @@ function WikiViewer({ entry, onEdit, onDelete, onRestore }: {
   onRestore: (updated: WikiEntry) => void
 }) {
   const [showHistory, setShowHistory] = useState(false)
+  const headings = extractHeadings(entry.content)
 
   function handleExport() {
     const md = `# ${entry.title}\n\n${entry.content}`
@@ -767,17 +845,21 @@ function WikiViewer({ entry, onEdit, onDelete, onRestore }: {
       {/* Content */}
       <div className="flex-1 overflow-y-auto px-6 py-5">
         {entry.content.trim() ? (
-          <div className={PROSE_CLS}>
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              urlTransform={safeUrl}
-              components={{
-                img: ({ src, alt }) => <WikiImage src={src} alt={alt} />,
-              }}
-            >
-              {entry.content}
-            </ReactMarkdown>
-          </div>
+          <>
+            <ArticleToc headings={headings} />
+            <div className={PROSE_CLS}>
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                urlTransform={safeUrl}
+                components={{
+                  img: ({ src, alt }) => <WikiImage src={src} alt={alt} />,
+                  ...wikiHeadingComponents,
+                }}
+              >
+                {entry.content}
+              </ReactMarkdown>
+            </div>
+          </>
         ) : (
           <p className="text-sm text-gray-300 dark:text-gray-600 italic">Sem conteúdo. Clique em Editar para começar.</p>
         )}
@@ -789,38 +871,50 @@ function WikiViewer({ entry, onEdit, onDelete, onRestore }: {
 // ─── Table of Contents (home view) ───────────────────────────────────────
 
 const HEADING_INDENT: Record<number, string> = {
-  1: 'pl-9',
-  2: 'pl-12',
-  3: 'pl-16',
+  1: 'pl-0',
+  2: 'pl-3',
+  3: 'pl-6',
 }
 
 function WikiTocEntry({ entry, idx, onSelectEntry }: { entry: WikiEntry; idx: number; onSelectEntry: (id: string) => void }) {
   const headings = extractHeadings(entry.content)
+  const [expanded, setExpanded] = useState(false)
   return (
     <li>
-      <button
-        onClick={() => onSelectEntry(entry.id)}
-        className="flex items-baseline gap-3 text-left w-full py-1.5 px-2 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-950/30 group transition-colors"
-      >
-        <span className="text-xs text-gray-400 dark:text-gray-600 w-5 text-right flex-shrink-0 tabular-nums">
-          {idx + 1}.
-        </span>
-        <span className="flex-1 min-w-0">
-          <span className="text-sm font-semibold text-amber-700 dark:text-amber-400 group-hover:underline">
-            {entry.title}
+      <div className="flex items-center gap-1">
+        <button
+          onClick={() => onSelectEntry(entry.id)}
+          className="flex items-baseline gap-3 text-left flex-1 min-w-0 py-1.5 px-2 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-950/30 group transition-colors"
+        >
+          <span className="text-xs text-gray-400 dark:text-gray-600 w-5 text-right flex-shrink-0 tabular-nums">
+            {idx + 1}.
           </span>
-          {entry.description && (
-            <span className="block text-xs text-gray-400 dark:text-gray-500 mt-0.5 truncate">{entry.description}</span>
-          )}
-        </span>
-      </button>
-      {headings.length > 0 && (
-        <ul className="mt-0.5 space-y-0.5">
+          <span className="flex-1 min-w-0">
+            <span className="text-sm font-semibold text-amber-700 dark:text-amber-400 group-hover:underline">
+              {entry.title}
+            </span>
+            {entry.description && (
+              <span className="block text-xs text-gray-400 dark:text-gray-500 mt-0.5 truncate">{entry.description}</span>
+            )}
+          </span>
+        </button>
+        {headings.length > 0 && (
+          <button
+            onClick={() => setExpanded(v => !v)}
+            title={expanded ? 'Ocultar seções' : 'Ver seções'}
+            className="p-1 flex-shrink-0 rounded text-gray-300 dark:text-gray-600 hover:text-gray-500 dark:hover:text-gray-400 transition-colors"
+          >
+            {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+          </button>
+        )}
+      </div>
+      {expanded && headings.length > 0 && (
+        <ul className="mt-0.5 mb-1 space-y-0.5 border-l border-gray-100 dark:border-gray-800 ml-7 pl-2">
           {headings.map((h, j) => (
             <li key={j}>
               <button
                 onClick={() => onSelectEntry(entry.id)}
-                className={`flex items-center text-left w-full py-0.5 px-2 rounded text-xs text-gray-500 dark:text-gray-400 hover:text-amber-600 dark:hover:text-amber-400 transition-colors ${HEADING_INDENT[h.level] ?? 'pl-9'}`}
+                className={`flex items-center text-left w-full py-0.5 rounded text-xs text-gray-500 dark:text-gray-400 hover:text-amber-600 dark:hover:text-amber-400 transition-colors ${HEADING_INDENT[h.level] ?? ''}`}
               >
                 <span className="truncate">{h.text}</span>
               </button>
