@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, Fragment } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   BookText, Plus, Trash2, Edit2, X, Link2, ImagePlus,
@@ -19,6 +19,13 @@ import { Label } from '@/components/ui/label'
 import { useToast } from '@/hooks/useToast'
 import { ToastContainer } from '@/components/ui/toast'
 import type { WikiEntry, WikiSection } from '@/types'
+
+function buildFlatList(topLevelItems: WikiEntry[], allEntries: WikiEntry[]): WikiEntry[] {
+  return topLevelItems.flatMap(entry => [
+    entry,
+    ...allEntries.filter(e => e.parentId === entry.id).sort((a, b) => a.order - b.order),
+  ])
+}
 
 function groupBySections(
   entries: WikiEntry[],
@@ -1362,16 +1369,24 @@ export function WikiPage() {
     if (source.droppableId === destination.droppableId && source.index === destination.index) return
 
     if (source.droppableId !== destination.droppableId) {
-      // Moving between sections: update category and recompute orders per section
-      const destGroupId = destination.droppableId
+      // Cross-section: always promote to top-level in destination section
+      const destGroup = groups.find(g => g.id === destination.droppableId)
+      if (!destGroup) return
+      const destFlat = buildFlatList(destGroup.items, entries)
+      // Map flat index → top-level insert index
+      let topLevelInsertIdx = 0
+      for (let i = 0; i < Math.min(destination.index, destFlat.length); i++) {
+        if (!destFlat[i].parentId) topLevelInsertIdx++
+      }
+      if (destination.index >= destFlat.length) topLevelInsertIdx = destGroup.items.length
       const newGroups = groups.map(g => {
         if (g.id === source.droppableId) {
           return { ...g, items: g.items.filter(e => e.id !== draggableId) }
         }
-        if (g.id === destGroupId) {
+        if (g.id === destination.droppableId) {
           const entry = entries.find(e => e.id === draggableId)!
           const newItems = [...g.items]
-          newItems.splice(destination.index, 0, entry)
+          newItems.splice(topLevelInsertIdx, 0, { ...entry, parentId: undefined })
           return { ...g, items: newItems }
         }
         return g
@@ -1381,10 +1396,12 @@ export function WikiPage() {
         const newCat = g.section ? g.section.id : undefined
         g.items.forEach((e, i) => toSave.push({ ...e, category: newCat, order: i }))
       }
-      queryClient.setQueryData(['wiki'], toSave)
+      // Preserve sub-entries from previous state (not included in group.items)
+      const allUpdated = entries.map(e => toSave.find(u => u.id === e.id) ?? e)
+      queryClient.setQueryData(['wiki'], allUpdated)
       const changed = toSave.filter(e => {
         const orig = entries.find(x => x.id === e.id)
-        return orig && (orig.order !== e.order || orig.category !== e.category)
+        return orig && (orig.order !== e.order || orig.category !== e.category || orig.parentId !== e.parentId)
       })
       try {
         await Promise.all(changed.map(e => saveWikiEntry(e)))
@@ -1393,18 +1410,41 @@ export function WikiPage() {
         queryClient.setQueryData(['wiki'], entries)
       }
     } else {
-      // Moving within same section
+      // Within same section: use flat list, infer new parentId from drop position
       const group = groups.find(g => g.id === source.droppableId)
       if (!group) return
-      const newItems = [...group.items]
-      const [moved] = newItems.splice(source.index, 1)
-      newItems.splice(destination.index, 0, moved)
-      const updatedItems = newItems.map((e, i) => ({ ...e, order: i }))
-      const updatedEntries = entries.map(e => updatedItems.find(u => u.id === e.id) ?? e)
+      const flatItems = buildFlatList(group.items, entries)
+      const [moved] = flatItems.splice(source.index, 1)
+      flatItems.splice(destination.index, 0, moved)
+
+      // Determine new parentId from the item immediately before the drop position
+      const prevItem = destination.index > 0 ? flatItems[destination.index - 1] : undefined
+      let newParentId: string | undefined
+      if (!prevItem) {
+        newParentId = undefined
+      } else if (prevItem.parentId) {
+        newParentId = prevItem.parentId
+      } else {
+        // prevItem is top-level: keep sub-entry only if prevItem is the moved item's current parent
+        newParentId = prevItem.id === moved.parentId ? moved.parentId : undefined
+      }
+
+      // Recompute orders across the new flat list
+      let topLevelIdx = 0
+      const parentChildIdx: Record<string, number> = {}
+      const newFlatWithOrders = flatItems.map(item => {
+        const pid = item.id === moved.id ? newParentId : item.parentId
+        if (!pid) return { ...item, parentId: undefined, order: topLevelIdx++ }
+        const childIdx = parentChildIdx[pid] ?? 0
+        parentChildIdx[pid] = childIdx + 1
+        return { ...item, parentId: pid, order: childIdx }
+      })
+
+      const updatedEntries = entries.map(e => newFlatWithOrders.find(u => u.id === e.id) ?? e)
       queryClient.setQueryData(['wiki'], updatedEntries)
-      const changed = updatedItems.filter(e => {
+      const changed = newFlatWithOrders.filter(e => {
         const orig = entries.find(x => x.id === e.id)
-        return orig && orig.order !== e.order
+        return orig && (orig.order !== e.order || orig.parentId !== e.parentId)
       })
       try {
         await Promise.all(changed.map(e => saveWikiEntry(e)))
@@ -1557,69 +1597,49 @@ export function WikiPage() {
                     <Droppable droppableId={id} isCombineEnabled>
                       {provided => (
                         <div ref={provided.innerRef} {...provided.droppableProps} className="min-h-[4px]">
-                          {items.map((entry, index) => {
-                            const subEntries = entries.filter(e => e.parentId === entry.id).sort((a, b) => a.order - b.order)
-                            return (
-                              <Fragment key={entry.id}>
-                                <Draggable draggableId={entry.id} index={index}>
-                                  {(prov, snap) => (
-                                    <div
-                                      ref={prov.innerRef}
-                                      {...prov.draggableProps}
-                                      className={`flex items-center border-l-2 transition-colors rounded-r ${
-                                        snap.combineTargetFor
-                                          ? 'border-amber-400 bg-amber-50 dark:bg-amber-950/60 ring-1 ring-inset ring-amber-300 dark:ring-amber-700'
-                                          : selectedId === entry.id
-                                            ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/40'
-                                            : 'border-transparent hover:bg-white dark:hover:bg-gray-800/60'
-                                      } ${snap.isDragging ? 'opacity-75 shadow-md' : ''}`}
-                                    >
-                                      <div
-                                        {...prov.dragHandleProps}
-                                        className="pl-2 pr-1 py-2.5 text-gray-300 hover:text-gray-400 cursor-grab active:cursor-grabbing flex-shrink-0 touch-none"
-                                      >
-                                        <GripVertical className="w-3.5 h-3.5" />
-                                      </div>
-                                      <button
-                                        onClick={() => selectEntry(entry.id)}
-                                        className="flex-1 text-left py-2.5 pr-4 min-w-0"
-                                      >
-                                        <p className={`text-sm font-medium truncate ${
-                                          snap.combineTargetFor
-                                            ? 'text-amber-600 dark:text-amber-400'
-                                            : selectedId === entry.id
-                                              ? 'text-amber-700 dark:text-amber-300'
-                                              : 'text-gray-700 dark:text-gray-300'
-                                        }`}>
-                                          {snap.combineTargetFor ? '↳ ' : ''}{entry.title}
-                                        </p>
-                                      </button>
-                                    </div>
-                                  )}
-                                </Draggable>
-                                {subEntries.map(child => (
-                                  <button
-                                    key={child.id}
-                                    onClick={() => selectEntry(child.id)}
-                                    className={`w-full text-left pl-9 pr-4 py-1.5 border-l-2 transition-colors flex items-center gap-1.5 ${
-                                      selectedId === child.id
-                                        ? 'border-amber-400 bg-amber-50 dark:bg-amber-950/40'
+                          {buildFlatList(items, entries).map((entry, index) => (
+                            <Draggable key={entry.id} draggableId={entry.id} index={index}>
+                              {(prov, snap) => (
+                                <div
+                                  ref={prov.innerRef}
+                                  {...prov.draggableProps}
+                                  className={`flex items-center border-l-2 transition-colors rounded-r ${
+                                    snap.combineTargetFor
+                                      ? 'border-amber-400 bg-amber-50 dark:bg-amber-950/60 ring-1 ring-inset ring-amber-300 dark:ring-amber-700'
+                                      : selectedId === entry.id
+                                        ? entry.parentId ? 'border-amber-400 bg-amber-50 dark:bg-amber-950/40' : 'border-amber-500 bg-amber-50 dark:bg-amber-950/40'
                                         : 'border-transparent hover:bg-white dark:hover:bg-gray-800/60'
-                                    }`}
+                                  } ${snap.isDragging ? 'opacity-75 shadow-md' : ''} ${entry.parentId ? 'pl-5' : ''}`}
+                                >
+                                  <div
+                                    {...prov.dragHandleProps}
+                                    className="pl-2 pr-1 py-2 text-gray-300 hover:text-gray-400 cursor-grab active:cursor-grabbing flex-shrink-0 touch-none"
                                   >
-                                    <Layers className="w-3 h-3 flex-shrink-0 text-amber-300 dark:text-amber-700" />
-                                    <span className={`text-xs truncate ${
-                                      selectedId === child.id
-                                        ? 'text-amber-700 dark:text-amber-300 font-medium'
-                                        : 'text-gray-500 dark:text-gray-400'
+                                    {entry.parentId
+                                      ? <Layers className="w-3 h-3 text-amber-300 dark:text-amber-700" />
+                                      : <GripVertical className="w-3.5 h-3.5" />
+                                    }
+                                  </div>
+                                  <button
+                                    onClick={() => selectEntry(entry.id)}
+                                    className="flex-1 text-left py-2 pr-4 min-w-0"
+                                  >
+                                    <p className={`truncate font-medium ${entry.parentId ? 'text-xs' : 'text-sm'} ${
+                                      snap.combineTargetFor
+                                        ? 'text-amber-600 dark:text-amber-400'
+                                        : selectedId === entry.id
+                                          ? 'text-amber-700 dark:text-amber-300'
+                                          : entry.parentId
+                                            ? 'text-gray-500 dark:text-gray-400'
+                                            : 'text-gray-700 dark:text-gray-300'
                                     }`}>
-                                      {child.title}
-                                    </span>
+                                      {snap.combineTargetFor ? '↳ ' : ''}{entry.title}
+                                    </p>
                                   </button>
-                                ))}
-                              </Fragment>
-                            )
-                          })}
+                                </div>
+                              )}
+                            </Draggable>
+                          ))}
                           {provided.placeholder}
                         </div>
                       )}
