@@ -609,6 +609,7 @@ function parseWikiMd(text: string, fallbackId: string): WikiEntry {
         updated_by: String(meta.updated_by ?? ''),
         ...(meta.category ? { category: String(meta.category) } : {}),
         ...(meta.description ? { description: String(meta.description) } : {}),
+        ...(meta.parentId ? { parentId: String(meta.parentId) } : {}),
         content: match[2].trim(),
       }
     } catch { /* fall through */ }
