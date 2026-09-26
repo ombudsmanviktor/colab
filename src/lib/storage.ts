@@ -640,7 +640,8 @@ export async function loadWikiEntries(): Promise<WikiEntry[]> {
       files.map(async f => {
         const file = await readFile(cfg(), `${WIKI_DIR}/${f.name}`, true)
         shaCache.set(`${WIKI_DIR}/${f.name}`, file.sha)
-        return parseWikiMd(decodeContent(file.content), f.name.replace('.md', ''))
+        const text = file.encoding === 'raw-text' ? file.content : decodeContent(file.content)
+        return parseWikiMd(text, f.name.replace('.md', ''))
       })
     )
     return results.sort((a, b) => a.order - b.order || a.title.localeCompare(b.title, 'pt-BR'))
