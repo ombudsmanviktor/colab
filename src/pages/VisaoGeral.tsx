@@ -622,18 +622,276 @@ function UserBlock({
 
 // ─── Front View ───────────────────────────────────────────────────────────
 
+function FrontTaskRow({
+  task, email, profile, canEdit, isAdmin,
+  allFronts, allEmails, profileMap,
+  onToggle, onUpdate, onDelete, onMoveAuthor,
+}: {
+  task: Task
+  email: string
+  profile: UserProfile | undefined
+  canEdit: boolean
+  isAdmin: boolean
+  allFronts: string[]
+  allEmails: string[]
+  profileMap: Map<string, UserProfile>
+  onToggle: () => void
+  onUpdate: (patch: Partial<Task>) => void
+  onDelete: () => void
+  onMoveAuthor: (toEmail: string) => void
+}) {
+  const [editingTitle, setEditingTitle] = useState(false)
+  const [titleDraft, setTitleDraft] = useState(task.title)
+  const [editingDate, setEditingDate] = useState(false)
+  const [editingFront, setEditingFront] = useState(false)
+  const [frontDraft, setFrontDraft] = useState(task.front ?? '')
+  const [showAuthorPicker, setShowAuthorPicker] = useState(false)
+  const authorRef = useRef<HTMLDivElement>(null)
+  const today = todayISO()
+  const dateClass = datePillClass(task.dueDate, today)
+  const fc = task.front ? frontColor(task.front) : null
+  const showGhosts = canEdit && !task.completed
+
+  useEffect(() => {
+    if (!showAuthorPicker) return
+    function handleClick(e: MouseEvent) {
+      if (authorRef.current && !authorRef.current.contains(e.target as Node)) setShowAuthorPicker(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [showAuthorPicker])
+
+  return (
+    <div className={`group/task flex items-start gap-2 py-1.5 ${task.completed ? 'opacity-50' : ''}`}>
+      <button
+        onClick={onToggle}
+        disabled={!canEdit}
+        className={`w-3.5 h-3.5 rounded border flex-shrink-0 mt-0.5 flex items-center justify-center transition-colors ${
+          task.completed
+            ? 'bg-amber-500 border-amber-500'
+            : `border-gray-300 dark:border-gray-600 ${canEdit ? 'hover:border-amber-400 cursor-pointer' : 'cursor-default'}`
+        }`}
+      >
+        {task.completed && <Check className="w-2 h-2 text-white" />}
+      </button>
+
+      <div className="flex-1 min-w-0">
+        {editingTitle ? (
+          <input
+            autoFocus
+            value={titleDraft}
+            onChange={e => setTitleDraft(e.target.value)}
+            onBlur={() => {
+              setEditingTitle(false)
+              if (titleDraft.trim() && titleDraft !== task.title) onUpdate({ title: titleDraft.trim() })
+              else setTitleDraft(task.title)
+            }}
+            onKeyDown={e => {
+              if (e.key === 'Enter') e.currentTarget.blur()
+              if (e.key === 'Escape') { setTitleDraft(task.title); setEditingTitle(false) }
+            }}
+            className="w-full bg-amber-50 dark:bg-amber-950/20 text-sm text-gray-800 dark:text-gray-200 outline-none border-b border-amber-300 dark:border-amber-600 pb-0.5 leading-snug"
+          />
+        ) : (
+          <p
+            onClick={() => { if (canEdit) { setTitleDraft(task.title); setEditingTitle(true) } }}
+            className={`text-sm leading-snug ${
+              task.completed ? 'line-through text-gray-400' : 'text-gray-800 dark:text-gray-200'
+            } ${canEdit ? 'cursor-text hover:text-amber-600 dark:hover:text-amber-400' : ''}`}
+          >
+            {task.title}
+          </p>
+        )}
+
+        <div className="flex flex-wrap items-center gap-1.5 mt-1">
+          {/* Author — clickable for admin */}
+          <div className="relative" ref={authorRef}>
+            <button
+              onClick={() => { if (isAdmin) setShowAuthorPicker(v => !v) }}
+              title={isAdmin ? 'Mudar responsável' : undefined}
+              className={isAdmin ? 'cursor-pointer hover:opacity-80 transition-opacity rounded-full' : 'cursor-default'}
+            >
+              <UserPill email={email} profile={profile} />
+            </button>
+            {showAuthorPicker && (
+              <div className="absolute top-full left-0 mt-1 z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg min-w-[150px] py-1">
+                {allEmails.map(e => (
+                  <button
+                    key={e}
+                    onClick={() => { onMoveAuthor(e); setShowAuthorPicker(false) }}
+                    className="w-full text-left px-3 py-1.5 text-xs hover:bg-amber-50 dark:hover:bg-amber-950/20 flex items-center gap-1"
+                  >
+                    <UserPill email={e} profile={profileMap.get(e)} />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Date pill */}
+          {editingDate ? (
+            <input
+              type="date"
+              autoFocus
+              defaultValue={task.dueDate ?? ''}
+              onChange={e => { onUpdate({ dueDate: e.target.value || undefined }); setEditingDate(false) }}
+              onBlur={() => setEditingDate(false)}
+              className="text-xs px-2 py-0.5 rounded-full border border-amber-300 dark:border-amber-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 outline-none"
+            />
+          ) : task.dueDate ? (
+            <button
+              onClick={() => { if (canEdit) setEditingDate(true) }}
+              className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ${dateClass} ${canEdit ? 'cursor-pointer hover:opacity-80' : 'cursor-default'}`}
+            >
+              <CalendarDays className="w-3 h-3" />
+              {formatDateShort(task.dueDate)}
+            </button>
+          ) : showGhosts ? (
+            <button
+              onClick={() => setEditingDate(true)}
+              className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full text-gray-300 dark:text-gray-600 hover:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50 opacity-0 group-hover/task:opacity-100 transition-opacity"
+            >
+              <CalendarDays className="w-3 h-3" />+ Data
+            </button>
+          ) : null}
+
+          {/* Front pill */}
+          {editingFront ? (
+            <>
+              <input
+                type="text"
+                autoFocus
+                list={`fronts-ft-${task.id}`}
+                value={frontDraft}
+                onChange={e => setFrontDraft(e.target.value)}
+                onBlur={() => { setEditingFront(false); onUpdate({ front: frontDraft.trim() || undefined }) }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') e.currentTarget.blur()
+                  if (e.key === 'Escape') { setFrontDraft(task.front ?? ''); setEditingFront(false) }
+                }}
+                className="text-xs px-2 py-0.5 rounded-full border border-amber-300 dark:border-amber-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 outline-none w-28"
+                placeholder="Frente…"
+              />
+              <datalist id={`fronts-ft-${task.id}`}>
+                {allFronts.map(f => <option key={f} value={f} />)}
+              </datalist>
+            </>
+          ) : fc ? (
+            <button
+              onClick={() => { if (canEdit) { setFrontDraft(task.front ?? ''); setEditingFront(true) } }}
+              className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ${fc.bg} ${fc.text} ${canEdit ? 'cursor-pointer hover:opacity-80' : 'cursor-default'}`}
+            >
+              <Tag className="w-2.5 h-2.5" />{task.front}
+            </button>
+          ) : showGhosts ? (
+            <button
+              onClick={() => { setFrontDraft(''); setEditingFront(true) }}
+              className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full text-gray-300 dark:text-gray-600 hover:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50 opacity-0 group-hover/task:opacity-100 transition-opacity"
+            >
+              <Tag className="w-2.5 h-2.5" />+ Frente
+            </button>
+          ) : null}
+
+          {/* Private */}
+          {(showGhosts || task.private) && (
+            <button
+              onClick={() => { if (canEdit) onUpdate({ private: !task.private }) }}
+              className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full transition-colors ${
+                task.private
+                  ? `bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400 ${canEdit ? 'hover:opacity-80 cursor-pointer' : 'cursor-default'}`
+                  : 'text-gray-300 dark:text-gray-600 hover:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50 opacity-0 group-hover/task:opacity-100 transition-opacity'
+              }`}
+            >
+              <Lock className="w-2.5 h-2.5" />
+              {task.private ? 'Privado' : '+ Privado'}
+            </button>
+          )}
+
+          {/* Delete */}
+          {canEdit && (
+            <button
+              onClick={onDelete}
+              className="inline-flex items-center text-xs px-1.5 py-0.5 rounded-full text-gray-300 dark:text-gray-600 hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 opacity-0 group-hover/task:opacity-100 transition-all"
+            >
+              <Trash2 className="w-3 h-3" />
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function AddFrontCard({ onAdd }: { onAdd: (name: string) => void }) {
+  const [isAdding, setIsAdding] = useState(false)
+  const [draft, setDraft] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
+  useEffect(() => { if (isAdding) inputRef.current?.focus() }, [isAdding])
+
+  function commit() {
+    if (draft.trim()) onAdd(draft.trim())
+    setDraft('')
+    setIsAdding(false)
+  }
+
+  return (
+    <div className="bg-white dark:bg-gray-800 border border-dashed border-gray-300 dark:border-gray-600 rounded-xl p-4 flex items-center justify-center min-h-[80px]">
+      {isAdding ? (
+        <div className="flex items-center gap-2 w-full">
+          <input
+            ref={inputRef}
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            onBlur={commit}
+            onKeyDown={e => {
+              if (e.key === 'Enter') e.currentTarget.blur()
+              if (e.key === 'Escape') { setDraft(''); setIsAdding(false) }
+            }}
+            placeholder="Nome da nova frente…"
+            className="flex-1 bg-transparent text-sm text-gray-800 dark:text-gray-200 outline-none border-b border-amber-300 dark:border-amber-600 pb-0.5"
+          />
+        </div>
+      ) : (
+        <button
+          onClick={() => setIsAdding(true)}
+          className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-amber-500 dark:hover:text-amber-400 transition-colors"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          Nova frente
+        </button>
+      )}
+    </div>
+  )
+}
+
 function FrontCard({
-  front, tasks, canCreate, onCreateTask, onToggle,
+  front, tasks, canCreate, isAdmin, currentUserEmail,
+  allFronts, allEmails, profileMap,
+  onCreateTask, onToggle, onUpdateTask, onDeleteTask, onMoveAuthor,
+  onRenameThisFront, onDeleteThisFront,
 }: {
   front: string
   tasks: EnrichedTask[]
   canCreate: boolean
+  isAdmin: boolean
+  currentUserEmail: string
+  allFronts: string[]
+  allEmails: string[]
+  profileMap: Map<string, UserProfile>
   onCreateTask: (title: string) => void
   onToggle: (email: string, taskId: string) => void
+  onUpdateTask: (email: string, taskId: string, patch: Partial<Task>) => void
+  onDeleteTask: (email: string, taskId: string) => void
+  onMoveAuthor: (fromEmail: string, taskId: string, toEmail: string) => void
+  onRenameThisFront: (newName: string) => void
+  onDeleteThisFront: () => void
 }) {
   const [showDone, setShowDone] = useState(false)
   const [isAdding, setIsAdding] = useState(false)
   const [newTitle, setNewTitle] = useState('')
+  const [editingFrontName, setEditingFrontName] = useState(false)
+  const [frontNameDraft, setFrontNameDraft] = useState(front)
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const addInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { if (isAdding) addInputRef.current?.focus() }, [isAdding])
@@ -646,7 +904,6 @@ function FrontCard({
   })
   const done = tasks.filter(et => et.task.completed)
   const fc = front !== 'Sem frente' ? frontColor(front) : null
-  const today = todayISO()
 
   function commitAdd() {
     if (newTitle.trim()) onCreateTask(newTitle.trim())
@@ -654,107 +911,185 @@ function FrontCard({
     setIsAdding(false)
   }
 
+  function commitFrontRename() {
+    setEditingFrontName(false)
+    if (frontNameDraft.trim() && frontNameDraft !== front) onRenameThisFront(frontNameDraft.trim())
+    else setFrontNameDraft(front)
+  }
+
   return (
-    <div className={`bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm overflow-hidden border-l-4 ${fc ? fc.borderL : 'border-l-gray-300 dark:border-l-gray-600'}`}>
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-700">
-        <div className="flex items-center gap-2 min-w-0">
-          {fc && <div className={`w-2 h-2 rounded-full flex-shrink-0 ${fc.dot}`} />}
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-white truncate">{front}</h3>
-        </div>
-        <span className={`text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0 ml-2 ${
-          pending.length > 0 ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300' : 'bg-gray-100 text-gray-400'
-        }`}>
-          {pending.length}
-        </span>
-      </div>
-
-      <div className="px-3 py-2 space-y-1">
-        {pending.map(({ task, email, profile }) => (
-          <div key={task.id} className="flex items-start gap-2 py-1.5 group/task">
-            <button
-              onClick={() => onToggle(email, task.id)}
-              className="w-3.5 h-3.5 rounded border border-gray-300 dark:border-gray-600 flex-shrink-0 mt-0.5 hover:border-amber-400 dark:hover:border-amber-500 transition-colors cursor-pointer"
-            />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm text-gray-800 dark:text-gray-200 leading-snug">{task.title}</p>
-              <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                <UserPill email={email} profile={profile} />
-                {task.dueDate && (
-                  <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ${datePillClass(task.dueDate, today)}`}>
-                    <CalendarDays className="w-3 h-3" />
-                    {formatDateShort(task.dueDate)}
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-        ))}
-
-        {pending.length === 0 && done.length === 0 && !isAdding && (
-          <p className="text-xs text-gray-300 dark:text-gray-600 italic py-1">Nenhuma tarefa pendente.</p>
-        )}
-
-        {done.length > 0 && (
-          <div className="border-t border-gray-100 dark:border-gray-700 mt-1 pt-1">
-            <button
-              onClick={() => setShowDone(v => !v)}
-              className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 py-1 transition-colors"
-            >
-              {showDone ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-              {done.length} {done.length === 1 ? 'concluída' : 'concluídas'}
-            </button>
-            {showDone && done.map(({ task, email, profile }) => (
-              <div key={task.id} className="flex items-center gap-2 py-1 opacity-40">
-                <div className="w-3.5 h-3.5 rounded border border-amber-400 bg-amber-400 flex-shrink-0 flex items-center justify-center">
-                  <Check className="w-2 h-2 text-white" />
-                </div>
-                <span className="text-sm text-gray-400 line-through flex-1 truncate">{task.title}</span>
-                <UserPill email={email} profile={profile} />
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Inline new task */}
-        {canCreate && (
-          isAdding ? (
-            <div className="flex items-center gap-2 pt-1">
-              <div className="w-3.5 h-3.5 rounded border border-gray-300 dark:border-gray-600 flex-shrink-0" />
+    <Droppable droppableId={front}>
+      {(provided, snapshot) => (
+        <div
+          ref={provided.innerRef}
+          {...provided.droppableProps}
+          className={`bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm overflow-visible border-l-4 group/card transition-shadow ${
+            snapshot.isDraggingOver ? 'shadow-md ring-2 ring-amber-300 dark:ring-amber-600' : ''
+          } ${fc ? fc.borderL : 'border-l-gray-300 dark:border-l-gray-600'}`}
+        >
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-700">
+            {editingFrontName ? (
               <input
-                ref={addInputRef}
-                value={newTitle}
-                onChange={e => setNewTitle(e.target.value)}
-                onBlur={commitAdd}
+                autoFocus
+                value={frontNameDraft}
+                onChange={e => setFrontNameDraft(e.target.value)}
+                onBlur={commitFrontRename}
                 onKeyDown={e => {
                   if (e.key === 'Enter') e.currentTarget.blur()
-                  if (e.key === 'Escape') { setNewTitle(''); setIsAdding(false) }
+                  if (e.key === 'Escape') { setFrontNameDraft(front); setEditingFrontName(false) }
                 }}
-                placeholder="Nova tarefa…"
-                className="flex-1 bg-transparent text-sm text-gray-800 dark:text-gray-200 outline-none border-b border-amber-300 dark:border-amber-600 pb-0.5"
+                className="flex-1 text-sm font-semibold text-gray-900 dark:text-white bg-amber-50 dark:bg-amber-950/20 outline-none border-b border-amber-300 dark:border-amber-600 pb-0.5 mr-2"
               />
+            ) : (
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                {fc && <div className={`w-2 h-2 rounded-full flex-shrink-0 ${fc.dot}`} />}
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white truncate">{front}</h3>
+                {isAdmin && front !== 'Sem frente' && (
+                  <button
+                    onClick={() => { setFrontNameDraft(front); setEditingFrontName(true) }}
+                    className="opacity-0 group-hover/card:opacity-100 p-0.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 hover:text-amber-500 transition-all"
+                    title="Renomear frente"
+                  >
+                    <Edit2 className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+            )}
+            <div className="flex items-center gap-1 ml-2 flex-shrink-0">
+              {isAdmin && front !== 'Sem frente' && (
+                confirmDelete ? (
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs text-red-500">Excluir?</span>
+                    <button onClick={() => { onDeleteThisFront(); setConfirmDelete(false) }} className="text-xs text-red-500 hover:text-red-700 font-semibold px-1">Sim</button>
+                    <button onClick={() => setConfirmDelete(false)} className="text-xs text-gray-400 hover:text-gray-600 px-1">Não</button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setConfirmDelete(true)}
+                    className="opacity-0 group-hover/card:opacity-100 p-0.5 rounded hover:bg-red-50 dark:hover:bg-red-950/20 text-gray-300 hover:text-red-400 transition-all"
+                    title="Excluir frente"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                )
+              )}
+              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                pending.length > 0 ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300' : 'bg-gray-100 text-gray-400'
+              }`}>
+                {pending.length}
+              </span>
             </div>
-          ) : (
-            <button
-              onClick={() => setIsAdding(true)}
-              className="flex items-center gap-1.5 mt-1 text-xs text-amber-500 hover:text-amber-700 px-1 py-1 rounded-md hover:bg-amber-50 dark:hover:bg-amber-950/20 transition-colors"
-            >
-              <Plus className="w-3.5 h-3.5" /> Nova tarefa
-            </button>
-          )
-        )}
-      </div>
-    </div>
+          </div>
+
+          <div className="px-3 py-2 space-y-0">
+            {pending.map(({ task, email, profile }, index) => (
+              <Draggable key={task.id} draggableId={`${email}::${task.id}`} index={index}>
+                {(dragProvided, dragSnapshot) => (
+                  <div
+                    ref={dragProvided.innerRef}
+                    {...dragProvided.draggableProps}
+                    {...dragProvided.dragHandleProps}
+                    className={dragSnapshot.isDragging ? 'opacity-75 shadow-md rounded-lg bg-white dark:bg-gray-800' : ''}
+                  >
+                    <FrontTaskRow
+                      task={task}
+                      email={email}
+                      profile={profile}
+                      canEdit={(email === currentUserEmail) || isAdmin}
+                      isAdmin={isAdmin}
+                      allFronts={allFronts}
+                      allEmails={allEmails}
+                      profileMap={profileMap}
+                      onToggle={() => onToggle(email, task.id)}
+                      onUpdate={patch => onUpdateTask(email, task.id, patch)}
+                      onDelete={() => onDeleteTask(email, task.id)}
+                      onMoveAuthor={toEmail => onMoveAuthor(email, task.id, toEmail)}
+                    />
+                  </div>
+                )}
+              </Draggable>
+            ))}
+            {provided.placeholder}
+
+            {pending.length === 0 && done.length === 0 && !isAdding && (
+              <p className="text-xs text-gray-300 dark:text-gray-600 italic py-1">Nenhuma tarefa pendente.</p>
+            )}
+
+            {done.length > 0 && (
+              <div className="border-t border-gray-100 dark:border-gray-700 mt-1 pt-1">
+                <button
+                  onClick={() => setShowDone(v => !v)}
+                  className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 py-1 transition-colors"
+                >
+                  {showDone ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                  {done.length} {done.length === 1 ? 'concluída' : 'concluídas'}
+                </button>
+                {showDone && done.map(({ task, email, profile }) => (
+                  <div key={task.id} className="flex items-center gap-2 py-1 opacity-40">
+                    <div className="w-3.5 h-3.5 rounded border border-amber-400 bg-amber-400 flex-shrink-0 flex items-center justify-center">
+                      <Check className="w-2 h-2 text-white" />
+                    </div>
+                    <span className="text-sm text-gray-400 line-through flex-1 truncate">{task.title}</span>
+                    <UserPill email={email} profile={profile} />
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {canCreate && (
+              isAdding ? (
+                <div className="flex items-center gap-2 pt-1">
+                  <div className="w-3.5 h-3.5 rounded border border-gray-300 dark:border-gray-600 flex-shrink-0" />
+                  <input
+                    ref={addInputRef}
+                    value={newTitle}
+                    onChange={e => setNewTitle(e.target.value)}
+                    onBlur={commitAdd}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') e.currentTarget.blur()
+                      if (e.key === 'Escape') { setNewTitle(''); setIsAdding(false) }
+                    }}
+                    placeholder="Nova tarefa…"
+                    className="flex-1 bg-transparent text-sm text-gray-800 dark:text-gray-200 outline-none border-b border-amber-300 dark:border-amber-600 pb-0.5"
+                  />
+                </div>
+              ) : (
+                <button
+                  onClick={() => setIsAdding(true)}
+                  className="flex items-center gap-1.5 mt-1 text-xs text-amber-500 hover:text-amber-700 px-1 py-1 rounded-md hover:bg-amber-50 dark:hover:bg-amber-950/20 transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Nova tarefa
+                </button>
+              )
+            )}
+          </div>
+        </div>
+      )}
+    </Droppable>
   )
 }
 
 function FrontView({
-  allTasks, profileMap, canCreate, onCreateTask, onToggle,
+  allTasks, profileMap, canCreate, isAdmin, currentUserEmail, allEmails, allFronts,
+  extraFronts, onCreateTask, onToggle, onUpdateTask, onDeleteTask, onMoveAuthor,
+  onRenameFrente, onDeleteFrente, onCreateFrente,
 }: {
   allTasks: UserTasks[]
   profileMap: Map<string, UserProfile>
   canCreate: boolean
+  isAdmin: boolean
+  currentUserEmail: string
+  allEmails: string[]
+  allFronts: string[]
+  extraFronts: string[]
   onCreateTask: (front: string, title: string) => void
   onToggle: (email: string, taskId: string) => void
+  onUpdateTask: (email: string, taskId: string, patch: Partial<Task>) => void
+  onDeleteTask: (email: string, taskId: string) => void
+  onMoveAuthor: (fromEmail: string, taskId: string, toEmail: string) => void
+  onRenameFrente: (oldName: string, newName: string) => void
+  onDeleteFrente: (name: string) => void
+  onCreateFrente: (name: string) => void
 }) {
   const grouped = useMemo(() => {
     const map = new Map<string, EnrichedTask[]>()
@@ -765,31 +1100,55 @@ function FrontView({
         map.get(key)!.push({ task, email: ut.email, profile: profileMap.get(ut.email) })
       }
     }
+    for (const f of extraFronts) {
+      if (!map.has(f)) map.set(f, [])
+    }
     const entries = [...map.entries()].sort(([a], [b]) => {
       if (a === 'Sem frente') return 1
       if (b === 'Sem frente') return -1
       return a.localeCompare(b, 'pt-BR')
     })
     return entries
-  }, [allTasks, profileMap])
+  }, [allTasks, profileMap, extraFronts])
 
-  if (grouped.length === 0) return (
-    <p className="text-center text-gray-400 py-16">Nenhuma tarefa cadastrada ainda.</p>
-  )
+  function onDragEnd(result: DropResult) {
+    if (!result.destination) return
+    const { draggableId, source, destination } = result
+    if (source.droppableId === destination.droppableId) return
+    const sepIdx = draggableId.indexOf('::')
+    if (sepIdx === -1) return
+    const email = draggableId.slice(0, sepIdx)
+    const taskId = draggableId.slice(sepIdx + 2)
+    const newFront = destination.droppableId === 'Sem frente' ? undefined : destination.droppableId
+    onUpdateTask(email, taskId, { front: newFront })
+  }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-      {grouped.map(([front, tasks]) => (
-        <FrontCard
-          key={front}
-          front={front}
-          tasks={tasks}
-          canCreate={canCreate}
-          onCreateTask={title => onCreateTask(front, title)}
-          onToggle={onToggle}
-        />
-      ))}
-    </div>
+    <DragDropContext onDragEnd={onDragEnd}>
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+        {grouped.map(([front, tasks]) => (
+          <FrontCard
+            key={front}
+            front={front}
+            tasks={tasks}
+            canCreate={canCreate}
+            isAdmin={isAdmin}
+            currentUserEmail={currentUserEmail}
+            allFronts={allFronts}
+            allEmails={allEmails}
+            profileMap={profileMap}
+            onCreateTask={title => onCreateTask(front, title)}
+            onToggle={onToggle}
+            onUpdateTask={onUpdateTask}
+            onDeleteTask={onDeleteTask}
+            onMoveAuthor={onMoveAuthor}
+            onRenameThisFront={newName => onRenameFrente(front, newName)}
+            onDeleteThisFront={() => onDeleteFrente(front)}
+          />
+        ))}
+        <AddFrontCard onAdd={onCreateFrente} />
+      </div>
+    </DragDropContext>
   )
 }
 
@@ -912,6 +1271,7 @@ export function VisaoGeral() {
   const adminEmails = usersIndex?.admins ?? []
   const [embedOpen, setEmbedOpen] = useState(false)
   const [viewMode, setViewMode] = useState<ViewMode>('front')
+  const [extraFronts, setExtraFronts] = useState<string[]>([])
   const savingRef = useRef<Map<string, Promise<void>>>(new Map())
 
   useEffect(() => {
@@ -992,8 +1352,9 @@ export function VisaoGeral() {
   const allFronts = useMemo(() => {
     const fronts = new Set<string>()
     allTasks.forEach(ut => ut.tasks.forEach(t => { if (t.front) fronts.add(t.front) }))
+    extraFronts.forEach(f => fronts.add(f))
     return [...fronts].sort((a, b) => a.localeCompare(b, 'pt-BR'))
-  }, [allTasks])
+  }, [allTasks, extraFronts])
 
   function handleToggleInFront(email: string, taskId: string) {
     if (email !== session?.email && !session?.isAdmin) return
@@ -1025,6 +1386,56 @@ export function VisaoGeral() {
     }
     handleSave({ ...existing, tasks: [...existing.tasks, newTask] })
     notifyTaskEvent({ eventType: 'created', taskTitle: newTask.title, taskOwnerEmail: email, adminEmails }).catch(() => {})
+  }
+
+  function handleUpdateTaskInFront(email: string, taskId: string, patch: Partial<Task>) {
+    if (email !== session?.email && !session?.isAdmin) return
+    const ut = allTasks.find(t => t.email === email)
+    if (!ut) return
+    handleSave({ ...ut, tasks: ut.tasks.map(t => t.id === taskId ? { ...t, ...patch } : t) })
+  }
+
+  function handleDeleteTaskInFront(email: string, taskId: string) {
+    if (email !== session?.email && !session?.isAdmin) return
+    const ut = allTasks.find(t => t.email === email)
+    if (!ut) return
+    handleSave({ ...ut, tasks: ut.tasks.filter(t => t.id !== taskId) })
+  }
+
+  function handleMoveAuthor(fromEmail: string, taskId: string, toEmail: string) {
+    if (!session?.isAdmin || fromEmail === toEmail) return
+    const fromUt = allTasks.find(t => t.email === fromEmail)
+    if (!fromUt) return
+    const task = fromUt.tasks.find(t => t.id === taskId)
+    if (!task) return
+    const toUt = allTasks.find(t => t.email === toEmail) ?? { email: toEmail, tasks: [], lastAccess: new Date().toISOString() }
+    handleSave({ ...fromUt, tasks: fromUt.tasks.filter(t => t.id !== taskId) })
+    handleSave({ ...toUt, tasks: [...toUt.tasks, { ...task, order: toUt.tasks.length }] })
+  }
+
+  function handleRenameFrente(oldName: string, newName: string) {
+    if (!newName.trim() || oldName === newName) return
+    for (const ut of allTasks) {
+      if (ut.tasks.some(t => t.front === oldName)) {
+        handleSave({ ...ut, tasks: ut.tasks.map(t => t.front === oldName ? { ...t, front: newName } : t) })
+      }
+    }
+    setExtraFronts(prev => prev.map(f => f === oldName ? newName : f))
+  }
+
+  function handleDeleteFrente(name: string) {
+    for (const ut of allTasks) {
+      if (ut.tasks.some(t => t.front === name)) {
+        handleSave({ ...ut, tasks: ut.tasks.map(t => t.front === name ? { ...t, front: undefined } : t) })
+      }
+    }
+    setExtraFronts(prev => prev.filter(f => f !== name))
+  }
+
+  function handleCreateFrente(name: string) {
+    const trimmed = name.trim()
+    if (!trimmed || allFronts.includes(trimmed) || extraFronts.includes(trimmed)) return
+    setExtraFronts(prev => [...prev, trimmed])
   }
 
   if (loading) return (
@@ -1128,8 +1539,19 @@ export function VisaoGeral() {
             }))}
             profileMap={profileMap}
             canCreate={!!session?.email}
+            isAdmin={!!session?.isAdmin}
+            currentUserEmail={session?.email ?? ''}
+            allEmails={allEmails}
+            allFronts={allFronts}
+            extraFronts={extraFronts}
             onCreateTask={handleCreateTaskInFront}
             onToggle={handleToggleInFront}
+            onUpdateTask={handleUpdateTaskInFront}
+            onDeleteTask={handleDeleteTaskInFront}
+            onMoveAuthor={handleMoveAuthor}
+            onRenameFrente={handleRenameFrente}
+            onDeleteFrente={handleDeleteFrente}
+            onCreateFrente={handleCreateFrente}
           />
         )}
 
