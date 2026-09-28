@@ -623,12 +623,13 @@ function UserBlock({
 // ─── Front View ───────────────────────────────────────────────────────────
 
 function FrontCard({
-  front, tasks, canCreate, onCreateTask,
+  front, tasks, canCreate, onCreateTask, onToggle,
 }: {
   front: string
   tasks: EnrichedTask[]
   canCreate: boolean
   onCreateTask: (title: string) => void
+  onToggle: (email: string, taskId: string) => void
 }) {
   const [showDone, setShowDone] = useState(false)
   const [isAdding, setIsAdding] = useState(false)
@@ -669,8 +670,11 @@ function FrontCard({
 
       <div className="px-3 py-2 space-y-1">
         {pending.map(({ task, email, profile }) => (
-          <div key={task.id} className="flex items-start gap-2 py-1.5">
-            <div className="w-3.5 h-3.5 rounded border border-gray-300 dark:border-gray-600 flex-shrink-0 mt-0.5" />
+          <div key={task.id} className="flex items-start gap-2 py-1.5 group/task">
+            <button
+              onClick={() => onToggle(email, task.id)}
+              className="w-3.5 h-3.5 rounded border border-gray-300 dark:border-gray-600 flex-shrink-0 mt-0.5 hover:border-amber-400 dark:hover:border-amber-500 transition-colors cursor-pointer"
+            />
             <div className="flex-1 min-w-0">
               <p className="text-sm text-gray-800 dark:text-gray-200 leading-snug">{task.title}</p>
               <div className="flex flex-wrap items-center gap-1.5 mt-1">
@@ -744,12 +748,13 @@ function FrontCard({
 }
 
 function FrontView({
-  allTasks, profileMap, canCreate, onCreateTask,
+  allTasks, profileMap, canCreate, onCreateTask, onToggle,
 }: {
   allTasks: UserTasks[]
   profileMap: Map<string, UserProfile>
   canCreate: boolean
   onCreateTask: (front: string, title: string) => void
+  onToggle: (email: string, taskId: string) => void
 }) {
   const grouped = useMemo(() => {
     const map = new Map<string, EnrichedTask[]>()
@@ -781,6 +786,7 @@ function FrontView({
           tasks={tasks}
           canCreate={canCreate}
           onCreateTask={title => onCreateTask(front, title)}
+          onToggle={onToggle}
         />
       ))}
     </div>
@@ -989,6 +995,22 @@ export function VisaoGeral() {
     return [...fronts].sort((a, b) => a.localeCompare(b, 'pt-BR'))
   }, [allTasks])
 
+  function handleToggleInFront(email: string, taskId: string) {
+    if (email !== session?.email && !session?.isAdmin) return
+    const ut = allTasks.find(t => t.email === email)
+    if (!ut) return
+    const now = new Date().toISOString()
+    const task = ut.tasks.find(t => t.id === taskId)
+    const completing = task && !task.completed
+    const tasks = ut.tasks.map(t =>
+      t.id === taskId ? { ...t, completed: !t.completed, completedAt: !t.completed ? now : undefined } : t
+    )
+    handleSave({ ...ut, tasks })
+    if (completing && task) {
+      notifyTaskEvent({ eventType: 'completed', taskTitle: task.title, taskOwnerEmail: email, adminEmails }).catch(() => {})
+    }
+  }
+
   function handleCreateTaskInFront(front: string, title: string) {
     if (!session?.email || !title.trim()) return
     const email = session.email
@@ -1107,6 +1129,7 @@ export function VisaoGeral() {
             profileMap={profileMap}
             canCreate={!!session?.email}
             onCreateTask={handleCreateTaskInFront}
+            onToggle={handleToggleInFront}
           />
         )}
 
