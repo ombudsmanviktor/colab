@@ -15,7 +15,7 @@ import {
   getFileAtCommit,
   type GitHubConfig,
 } from './github'
-import type { UsersIndex, UserTasks, UserProfile, OrdemDoDia, AtaDecisao, Leitura, Producao, SugestaoMessage, Orientacao, Anexo, TimelineData, CalloutData, WikiEntry, MeetingPlan, ActivityEntry } from '@/types'
+import type { UsersIndex, UserTasks, UserProfile, OrdemDoDia, AtaDecisao, Leitura, Producao, SugestaoMessage, Orientacao, Anexo, TimelineData, CalloutData, WikiEntry, MeetingPlan, ActivityEntry, FrontDoc } from '@/types'
 import type { AppRepoConfig } from '@/lib/appConfig'
 import { emailSlug, generateId } from './utils'
 import {
@@ -529,6 +529,38 @@ export async function uploadAnexo(entityType: string, entityId: string, file: Fi
     path: filePath,
     url: getRawUrl(c, filePath),
   }
+}
+
+// ─── Documentos de frente ─────────────────────────────────────────────────
+
+const FRONT_DOCS_PATH = 'fronts/docs.yaml'
+
+export async function loadFrontDocs(): Promise<Record<string, FrontDoc[]>> {
+  if (isDemoMode()) return {}
+  try {
+    const data = await readYaml<Record<string, FrontDoc[]>>(FRONT_DOCS_PATH, true)
+    return data ?? {}
+  } catch {
+    return {}
+  }
+}
+
+export async function saveFrontDocs(docs: Record<string, FrontDoc[]>): Promise<void> {
+  if (isDemoMode()) return
+  await writeYaml(FRONT_DOCS_PATH, docs, 'Update front docs')
+}
+
+export async function uploadFrontDocFile(docId: string, file: File): Promise<string> {
+  const c = cfg()
+  const filePath = `fronts/files/${docId}/${file.name}`
+  let existingSha: string | undefined
+  try {
+    const existing = await readFile(c, filePath)
+    existingSha = existing.sha
+  } catch { /* new file */ }
+  const result = await writeBinaryFile(c, filePath, file, `Upload front doc ${file.name}`, existingSha)
+  shaCache.set(filePath, result.content.sha)
+  return getRawUrl(c, filePath)
 }
 
 // ─── Linha do Tempo ───────────────────────────────────────────────────────

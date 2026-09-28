@@ -4,19 +4,20 @@ import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-p
 import {
   Plus, GripVertical, Check, Trash2, Tag, Code2, Lock,
   LayoutDashboard, Layers, CalendarDays, ChevronDown, ChevronUp, Edit2, Megaphone,
+  Paperclip, ExternalLink,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useAuth } from '@/contexts/AuthContext'
 import { useTheme } from '@/contexts/ThemeContext'
-import { loadAllUserTasks, loadAllProfiles, saveUserTasks, loadUsersIndex, loadCallout, saveCallout, generateId } from '@/lib/storage'
+import { loadAllUserTasks, loadAllProfiles, saveUserTasks, loadUsersIndex, loadCallout, saveCallout, generateId, loadFrontDocs, saveFrontDocs, uploadFrontDocFile } from '@/lib/storage'
 import { notifyTaskEvent } from '@/lib/emailjs'
 import { emailInitials, emailSlug, todayISO } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useToast } from '@/hooks/useToast'
 import { ToastContainer } from '@/components/ui/toast'
-import type { Task, UserTasks, UserProfile, UsersIndex, CalloutData } from '@/types'
+import type { Task, UserTasks, UserProfile, UsersIndex, CalloutData, FrontDoc } from '@/types'
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
@@ -869,6 +870,7 @@ function FrontCard({
   allFronts, allEmails, profileMap,
   onCreateTask, onToggle, onUpdateTask, onDeleteTask, onMoveAuthor,
   onRenameThisFront, onDeleteThisFront,
+  docs, onAddDoc, onRemoveDoc,
 }: {
   front: string
   tasks: EnrichedTask[]
@@ -885,6 +887,9 @@ function FrontCard({
   onMoveAuthor: (fromEmail: string, taskId: string, toEmail: string) => void
   onRenameThisFront: (newName: string) => void
   onDeleteThisFront: () => void
+  docs: FrontDoc[]
+  onAddDoc: (doc: FrontDoc) => void
+  onRemoveDoc: (docId: string) => void
 }) {
   const [showDone, setShowDone] = useState(false)
   const [isAdding, setIsAdding] = useState(false)
@@ -892,6 +897,12 @@ function FrontCard({
   const [editingFrontName, setEditingFrontName] = useState(false)
   const [frontNameDraft, setFrontNameDraft] = useState(front)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [addingDoc, setAddingDoc] = useState(false)
+  const [docType, setDocType] = useState<'file' | 'link'>('link')
+  const [docTitle, setDocTitle] = useState('')
+  const [docUrl, setDocUrl] = useState('')
+  const [docFile, setDocFile] = useState<File | null>(null)
+  const [uploadingDoc, setUploadingDoc] = useState(false)
   const addInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { if (isAdding) addInputRef.current?.focus() }, [isAdding])
@@ -915,6 +926,34 @@ function FrontCard({
     setEditingFrontName(false)
     if (frontNameDraft.trim() && frontNameDraft !== front) onRenameThisFront(frontNameDraft.trim())
     else setFrontNameDraft(front)
+  }
+
+  function resetDocForm() {
+    setAddingDoc(false)
+    setDocTitle('')
+    setDocUrl('')
+    setDocFile(null)
+    setDocType('link')
+  }
+
+  async function commitDoc() {
+    if (!docTitle.trim()) return
+    if (docType === 'link' && !docUrl.trim()) return
+    if (docType === 'file' && !docFile) return
+    const id = crypto.randomUUID()
+    setUploadingDoc(true)
+    try {
+      let url = docUrl.trim()
+      let path: string | undefined
+      if (docType === 'file' && docFile) {
+        url = await uploadFrontDocFile(id, docFile)
+        path = `fronts/files/${id}/${docFile.name}`
+      }
+      onAddDoc({ id, title: docTitle.trim(), type: docType, url, path, addedBy: currentUserEmail, addedAt: new Date().toISOString() })
+      resetDocForm()
+    } finally {
+      setUploadingDoc(false)
+    }
   }
 
   return (
@@ -1054,13 +1093,109 @@ function FrontCard({
                   />
                 </div>
               ) : (
-                <button
-                  onClick={() => setIsAdding(true)}
-                  className="flex items-center gap-1.5 mt-1 text-xs text-amber-500 hover:text-amber-700 px-1 py-1 rounded-md hover:bg-amber-50 dark:hover:bg-amber-950/20 transition-colors"
-                >
-                  <Plus className="w-3.5 h-3.5" /> Nova tarefa
-                </button>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <button
+                    onClick={() => setIsAdding(true)}
+                    className="flex items-center gap-1.5 mt-1 text-xs text-amber-500 hover:text-amber-700 px-1 py-1 rounded-md hover:bg-amber-50 dark:hover:bg-amber-950/20 transition-colors"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Nova tarefa
+                  </button>
+                  <button
+                    onClick={() => setAddingDoc(true)}
+                    className="flex items-center gap-1.5 mt-1 text-xs text-blue-500 hover:text-blue-700 px-1 py-1 rounded-md hover:bg-blue-50 dark:hover:bg-blue-950/20 transition-colors"
+                  >
+                    <Paperclip className="w-3.5 h-3.5" /> Documento de referência
+                  </button>
+                </div>
               )
+            )}
+
+            {/* Add doc form */}
+            {addingDoc && (
+              <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-100 dark:border-blue-900/40 space-y-2">
+                {/* Type toggle */}
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300 cursor-pointer">
+                    <input type="radio" name={`doctype-${front}`} checked={docType === 'link'} onChange={() => setDocType('link')} className="accent-blue-500" />
+                    Link externo
+                  </label>
+                  <label className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300 cursor-pointer">
+                    <input type="radio" name={`doctype-${front}`} checked={docType === 'file'} onChange={() => setDocType('file')} className="accent-blue-500" />
+                    Arquivo
+                  </label>
+                </div>
+                {/* Title */}
+                <input
+                  autoFocus
+                  value={docTitle}
+                  onChange={e => setDocTitle(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Escape') resetDocForm() }}
+                  placeholder="Título do documento…"
+                  className="w-full bg-white dark:bg-gray-800 text-sm text-gray-800 dark:text-gray-200 outline-none border border-blue-200 dark:border-blue-800 rounded px-2 py-1 placeholder:text-gray-400"
+                />
+                {/* URL or file */}
+                {docType === 'link' ? (
+                  <input
+                    value={docUrl}
+                    onChange={e => setDocUrl(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commitDoc() } if (e.key === 'Escape') resetDocForm() }}
+                    placeholder="https://…"
+                    type="url"
+                    className="w-full bg-white dark:bg-gray-800 text-sm text-gray-800 dark:text-gray-200 outline-none border border-blue-200 dark:border-blue-800 rounded px-2 py-1 placeholder:text-gray-400"
+                  />
+                ) : (
+                  <input
+                    type="file"
+                    onChange={e => setDocFile(e.target.files?.[0] ?? null)}
+                    className="w-full text-xs text-gray-600 dark:text-gray-400 file:mr-2 file:py-0.5 file:px-2 file:rounded file:border-0 file:text-xs file:bg-blue-100 file:text-blue-700 dark:file:bg-blue-900/40 dark:file:text-blue-300 cursor-pointer"
+                  />
+                )}
+                <div className="flex items-center gap-2 pt-0.5">
+                  <button
+                    onClick={commitDoc}
+                    disabled={uploadingDoc || !docTitle.trim() || (docType === 'link' ? !docUrl.trim() : !docFile)}
+                    className="text-xs px-3 py-1 rounded bg-blue-500 hover:bg-blue-600 text-white disabled:opacity-40 transition-colors"
+                  >
+                    {uploadingDoc ? 'Enviando…' : 'Adicionar'}
+                  </button>
+                  <button onClick={resetDocForm} className="text-xs text-gray-400 hover:text-gray-600 transition-colors">
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Reference documents list */}
+            {docs.length > 0 && (
+              <div className="mt-2 pt-2 border-t border-gray-100 dark:border-gray-700">
+                <p className="text-[10px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-1.5 px-1">Referências</p>
+                <div className="space-y-1">
+                  {docs.map(doc => (
+                    <div key={doc.id} className="group/doc flex items-center gap-2 py-0.5 px-1 rounded hover:bg-gray-50 dark:hover:bg-gray-700/40">
+                      {doc.type === 'file'
+                        ? <Paperclip className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                        : <ExternalLink className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                      }
+                      <a
+                        href={doc.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex-1 text-xs text-blue-600 dark:text-blue-400 hover:underline truncate"
+                      >
+                        {doc.title}
+                      </a>
+                      {(isAdmin || doc.addedBy === currentUserEmail) && (
+                        <button
+                          onClick={() => onRemoveDoc(doc.id)}
+                          className="opacity-0 group-hover/doc:opacity-100 text-gray-300 hover:text-red-400 transition-all"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
         </div>
@@ -1072,7 +1207,7 @@ function FrontCard({
 function FrontView({
   allTasks, profileMap, canCreate, isAdmin, currentUserEmail, allEmails, allFronts,
   extraFronts, onCreateTask, onToggle, onUpdateTask, onDeleteTask, onMoveAuthor,
-  onRenameFrente, onDeleteFrente, onCreateFrente,
+  onRenameFrente, onDeleteFrente, onCreateFrente, frontDocs, onAddDoc, onRemoveDoc,
 }: {
   allTasks: UserTasks[]
   profileMap: Map<string, UserProfile>
@@ -1090,6 +1225,9 @@ function FrontView({
   onRenameFrente: (oldName: string, newName: string) => void
   onDeleteFrente: (name: string) => void
   onCreateFrente: (name: string) => void
+  frontDocs: Record<string, FrontDoc[]>
+  onAddDoc: (front: string, doc: FrontDoc) => void
+  onRemoveDoc: (front: string, docId: string) => void
 }) {
   const grouped = useMemo(() => {
     const map = new Map<string, EnrichedTask[]>()
@@ -1144,6 +1282,9 @@ function FrontView({
             onMoveAuthor={onMoveAuthor}
             onRenameThisFront={newName => onRenameFrente(front, newName)}
             onDeleteThisFront={() => onDeleteFrente(front)}
+            docs={frontDocs[front] ?? []}
+            onAddDoc={doc => onAddDoc(front, doc)}
+            onRemoveDoc={docId => onRemoveDoc(front, docId)}
           />
         ))}
         <AddFrontCard onAdd={onCreateFrente} />
@@ -1272,18 +1413,21 @@ export function VisaoGeral() {
   const [embedOpen, setEmbedOpen] = useState(false)
   const [viewMode, setViewMode] = useState<ViewMode>('front')
   const [extraFronts, setExtraFronts] = useState<string[]>([])
+  const [frontDocs, setFrontDocs] = useState<Record<string, FrontDoc[]>>({})
   const savingRef = useRef<Map<string, Promise<void>>>(new Map())
 
   useEffect(() => {
     async function load() {
       try {
-        const [idx, tasks, profs, ct] = await Promise.all([
+        const [idx, tasks, profs, ct, docs] = await Promise.all([
           loadUsersIndex(),
           loadAllUserTasks(),
           loadAllProfiles(),
           loadCallout(),
+          loadFrontDocs(),
         ])
         setCallout(ct)
+        setFrontDocs(docs)
         // Populate the shared TanStack Query cache so Usuarios and VisaoGeral
         // stay in sync from the very first load.
         queryClient.setQueryData(['users-index'], idx)
@@ -1421,6 +1565,13 @@ export function VisaoGeral() {
       }
     }
     setExtraFronts(prev => prev.map(f => f === oldName ? newName : f))
+    setFrontDocs(prev => {
+      if (!prev[oldName]) return prev
+      const next = { ...prev, [newName]: prev[oldName] }
+      delete next[oldName]
+      saveFrontDocs(next).catch(() => {})
+      return next
+    })
   }
 
   function handleDeleteFrente(name: string) {
@@ -1430,12 +1581,34 @@ export function VisaoGeral() {
       }
     }
     setExtraFronts(prev => prev.filter(f => f !== name))
+    setFrontDocs(prev => {
+      const next = { ...prev }
+      delete next[name]
+      saveFrontDocs(next).catch(() => {})
+      return next
+    })
   }
 
   function handleCreateFrente(name: string) {
     const trimmed = name.trim()
     if (!trimmed || allFronts.includes(trimmed) || extraFronts.includes(trimmed)) return
     setExtraFronts(prev => [...prev, trimmed])
+  }
+
+  function handleAddFrontDoc(front: string, doc: FrontDoc) {
+    setFrontDocs(prev => {
+      const next = { ...prev, [front]: [...(prev[front] ?? []), doc] }
+      saveFrontDocs(next).catch(() => toast({ title: 'Erro ao salvar documento', variant: 'destructive' }))
+      return next
+    })
+  }
+
+  function handleRemoveFrontDoc(front: string, docId: string) {
+    setFrontDocs(prev => {
+      const next = { ...prev, [front]: (prev[front] ?? []).filter(d => d.id !== docId) }
+      saveFrontDocs(next).catch(() => toast({ title: 'Erro ao salvar documento', variant: 'destructive' }))
+      return next
+    })
   }
 
   if (loading) return (
@@ -1552,6 +1725,9 @@ export function VisaoGeral() {
             onRenameFrente={handleRenameFrente}
             onDeleteFrente={handleDeleteFrente}
             onCreateFrente={handleCreateFrente}
+            frontDocs={frontDocs}
+            onAddDoc={handleAddFrontDoc}
+            onRemoveDoc={handleRemoveFrontDoc}
           />
         )}
 

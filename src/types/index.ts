@@ -7,6 +7,16 @@ export interface UsersIndex {
 
 // ─── Tasks (Visão Geral) ──────────────────────────────────────────────────
 
+export interface FrontDoc {
+  id: string
+  title: string
+  type: 'file' | 'link'
+  url: string
+  path?: string
+  addedBy: string
+  addedAt: string
+}
+
 export interface Task {
   id: string
   title: string
