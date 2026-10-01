@@ -871,6 +871,7 @@ function FrontCard({
   onCreateTask, onToggle, onUpdateTask, onDeleteTask, onMoveAuthor,
   onRenameThisFront, onDeleteThisFront,
   docs, onAddDoc, onRemoveDoc,
+  responsibles, onAddResponsible, onRemoveResponsible,
 }: {
   front: string
   tasks: EnrichedTask[]
