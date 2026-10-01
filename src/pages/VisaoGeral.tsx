@@ -908,6 +908,7 @@ function FrontCard({
   const [docFile, setDocFile] = useState<File | null>(null)
   const [uploadingDoc, setUploadingDoc] = useState(false)
   const [showResponsiblePicker, setShowResponsiblePicker] = useState(false)
+  const [externalName, setExternalName] = useState('')
   const responsiblePickerRef = useRef<HTMLDivElement>(null)
   const addInputRef = useRef<HTMLInputElement>(null)
 
@@ -1220,18 +1221,25 @@ function FrontCard({
               <div className="mt-2 pt-2 border-t border-gray-100 dark:border-gray-700">
                 <p className="text-[10px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-2 px-1">Responsáveis</p>
                 <div className="flex flex-wrap items-center gap-1.5 px-1">
-                  {responsibles.map(email => {
-                    const prof = profileMap.get(email)
+                  {responsibles.map(entry => {
+                    const isExternal = entry.startsWith('ext:')
+                    const displayName = isExternal
+                      ? entry.slice(4)
+                      : (profileMap.get(entry)?.nome?.split(' ')[0] || entry.split('@')[0])
+                    const prof = isExternal ? undefined : profileMap.get(entry)
+                    const initials = isExternal
+                      ? entry.slice(4).split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
+                      : emailInitials(entry)
                     return (
-                      <div key={email} className="group/resp relative flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400">
+                      <div key={entry} className="group/resp relative flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400">
                         {prof?.imagemBase64
                           ? <img src={prof.imagemBase64} className="w-3 h-3 rounded-full object-cover flex-shrink-0" alt="" />
-                          : <span className="font-bold text-[10px]">{emailInitials(email)}</span>
+                          : <span className="font-bold text-[10px]">{initials}</span>
                         }
-                        <span>{prof?.nome?.split(' ')[0] || email.split('@')[0]}</span>
+                        <span>{displayName}</span>
                         {isAdmin && (
                           <button
-                            onClick={() => onRemoveResponsible(email)}
+                            onClick={() => onRemoveResponsible(entry)}
                             className="opacity-0 group-hover/resp:opacity-100 ml-0.5 text-amber-400 hover:text-red-400 transition-all"
                           >
                             ×
@@ -1250,7 +1258,7 @@ function FrontCard({
                         +
                       </button>
                       {showResponsiblePicker && (
-                        <div className="absolute bottom-full left-0 mb-1 z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg min-w-[160px] py-1 max-h-48 overflow-y-auto">
+                        <div className="absolute bottom-full left-0 mb-1 z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg min-w-[180px] py-1 max-h-56 overflow-y-auto">
                           {allEmails.filter(e => !responsibles.includes(e)).map(e => {
                             const prof = profileMap.get(e)
                             return (
@@ -1268,8 +1276,38 @@ function FrontCard({
                             )
                           })}
                           {allEmails.filter(e => !responsibles.includes(e)).length === 0 && (
-                            <p className="px-3 py-2 text-xs text-gray-400 italic">Todos já adicionados</p>
+                            <p className="px-3 py-1.5 text-xs text-gray-400 italic">Todos já adicionados</p>
                           )}
+                          <div className="border-t border-gray-100 dark:border-gray-700 mt-1 pt-1 px-2 pb-1">
+                            <p className="text-[10px] text-gray-400 dark:text-gray-500 mb-1">Externo</p>
+                            <div className="flex gap-1">
+                              <input
+                                type="text"
+                                value={externalName}
+                                onChange={e => setExternalName(e.target.value)}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter' && externalName.trim()) {
+                                    onAddResponsible(`ext:${externalName.trim()}`)
+                                    setExternalName('')
+                                    setShowResponsiblePicker(false)
+                                  }
+                                }}
+                                placeholder="Nome..."
+                                className="flex-1 min-w-0 text-xs border border-gray-200 dark:border-gray-600 rounded px-1.5 py-0.5 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 placeholder-gray-300 dark:placeholder-gray-500 focus:outline-none focus:border-amber-300"
+                              />
+                              <button
+                                onClick={() => {
+                                  if (!externalName.trim()) return
+                                  onAddResponsible(`ext:${externalName.trim()}`)
+                                  setExternalName('')
+                                  setShowResponsiblePicker(false)
+                                }}
+                                className="px-1.5 py-0.5 text-xs rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-colors"
+                              >
+                                +
+                              </button>
+                            </div>
+                          </div>
                         </div>
                       )}
                     </div>
