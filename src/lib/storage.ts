@@ -563,6 +563,23 @@ export async function uploadFrontDocFile(docId: string, file: File): Promise<str
   return getRawUrl(c, filePath)
 }
 
+const FRONT_RESPONSIBLES_PATH = 'fronts/responsibles.yaml'
+
+export async function loadFrontResponsibles(): Promise<Record<string, string[]>> {
+  if (isDemoMode()) return {}
+  try {
+    const data = await readYaml<Record<string, string[]>>(FRONT_RESPONSIBLES_PATH, true)
+    return data ?? {}
+  } catch {
+    return {}
+  }
+}
+
+export async function saveFrontResponsibles(data: Record<string, string[]>): Promise<void> {
+  if (isDemoMode()) return
+  await writeYaml(FRONT_RESPONSIBLES_PATH, data, 'Update front responsibles')
+}
+
 // ─── Linha do Tempo ───────────────────────────────────────────────────────
 
 const TIMELINE_PATH = 'timeline/data.yaml'

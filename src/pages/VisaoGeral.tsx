@@ -10,7 +10,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useAuth } from '@/contexts/AuthContext'
 import { useTheme } from '@/contexts/ThemeContext'
-import { loadAllUserTasks, loadAllProfiles, saveUserTasks, loadUsersIndex, loadCallout, saveCallout, generateId, loadFrontDocs, saveFrontDocs, uploadFrontDocFile } from '@/lib/storage'
+import { loadAllUserTasks, loadAllProfiles, saveUserTasks, loadUsersIndex, loadCallout, saveCallout, generateId, loadFrontDocs, saveFrontDocs, uploadFrontDocFile, loadFrontResponsibles, saveFrontResponsibles } from '@/lib/storage'
 import { notifyTaskEvent } from '@/lib/emailjs'
 import { emailInitials, emailSlug, todayISO } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -890,6 +890,9 @@ function FrontCard({
   docs: FrontDoc[]
   onAddDoc: (doc: FrontDoc) => void
   onRemoveDoc: (docId: string) => void
+  responsibles: string[]
+  onAddResponsible: (email: string) => void
+  onRemoveResponsible: (email: string) => void
 }) {
   const [showDone, setShowDone] = useState(false)
   const [isAdding, setIsAdding] = useState(false)
@@ -903,7 +906,20 @@ function FrontCard({
   const [docUrl, setDocUrl] = useState('')
   const [docFile, setDocFile] = useState<File | null>(null)
   const [uploadingDoc, setUploadingDoc] = useState(false)
+  const [showResponsiblePicker, setShowResponsiblePicker] = useState(false)
+  const responsiblePickerRef = useRef<HTMLDivElement>(null)
   const addInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (!showResponsiblePicker) return
+    function handler(e: MouseEvent) {
+      if (responsiblePickerRef.current && !responsiblePickerRef.current.contains(e.target as Node)) {
+        setShowResponsiblePicker(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showResponsiblePicker])
 
   useEffect(() => { if (isAdding) addInputRef.current?.focus() }, [isAdding])
 
@@ -1197,6 +1213,69 @@ function FrontCard({
                 </div>
               </div>
             )}
+
+            {/* Responsibles */}
+            {(responsibles.length > 0 || isAdmin) && (
+              <div className="mt-2 pt-2 border-t border-gray-100 dark:border-gray-700">
+                <p className="text-[10px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-2 px-1">Responsáveis</p>
+                <div className="flex flex-wrap items-center gap-1.5 px-1">
+                  {responsibles.map(email => {
+                    const prof = profileMap.get(email)
+                    return (
+                      <div key={email} className="group/resp relative flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400">
+                        {prof?.imagemBase64
+                          ? <img src={prof.imagemBase64} className="w-3 h-3 rounded-full object-cover flex-shrink-0" alt="" />
+                          : <span className="font-bold text-[10px]">{emailInitials(email)}</span>
+                        }
+                        <span>{prof?.nome?.split(' ')[0] || email.split('@')[0]}</span>
+                        {isAdmin && (
+                          <button
+                            onClick={() => onRemoveResponsible(email)}
+                            className="opacity-0 group-hover/resp:opacity-100 ml-0.5 text-amber-400 hover:text-red-400 transition-all"
+                          >
+                            ×
+                          </button>
+                        )}
+                      </div>
+                    )
+                  })}
+                  {isAdmin && (
+                    <div className="relative" ref={responsiblePickerRef}>
+                      <button
+                        onClick={() => setShowResponsiblePicker(v => !v)}
+                        className="flex items-center justify-center w-5 h-5 rounded-full border border-dashed border-amber-300 dark:border-amber-600 text-amber-400 hover:border-amber-500 hover:text-amber-600 transition-colors text-sm leading-none"
+                        title="Adicionar responsável"
+                      >
+                        +
+                      </button>
+                      {showResponsiblePicker && (
+                        <div className="absolute bottom-full left-0 mb-1 z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg min-w-[160px] py-1 max-h-48 overflow-y-auto">
+                          {allEmails.filter(e => !responsibles.includes(e)).map(e => {
+                            const prof = profileMap.get(e)
+                            return (
+                              <button
+                                key={e}
+                                onClick={() => { onAddResponsible(e); setShowResponsiblePicker(false) }}
+                                className="w-full text-left px-3 py-1.5 text-xs hover:bg-amber-50 dark:hover:bg-amber-950/20 flex items-center gap-1.5 text-gray-700 dark:text-gray-300"
+                              >
+                                {prof?.imagemBase64
+                                  ? <img src={prof.imagemBase64} className="w-4 h-4 rounded-full object-cover flex-shrink-0" alt="" />
+                                  : <span className="w-4 h-4 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center text-[9px] font-bold text-amber-700 dark:text-amber-400 flex-shrink-0">{emailInitials(e)}</span>
+                                }
+                                {prof?.nome?.split(' ')[0] || e.split('@')[0]}
+                              </button>
+                            )
+                          })}
+                          {allEmails.filter(e => !responsibles.includes(e)).length === 0 && (
+                            <p className="px-3 py-2 text-xs text-gray-400 italic">Todos já adicionados</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1208,6 +1287,7 @@ function FrontView({
   allTasks, profileMap, canCreate, isAdmin, currentUserEmail, allEmails, allFronts,
   extraFronts, onCreateTask, onToggle, onUpdateTask, onDeleteTask, onMoveAuthor,
   onRenameFrente, onDeleteFrente, onCreateFrente, frontDocs, onAddDoc, onRemoveDoc,
+  frontResponsibles, onAddResponsible, onRemoveResponsible,
 }: {
   allTasks: UserTasks[]
   profileMap: Map<string, UserProfile>
@@ -1228,6 +1308,9 @@ function FrontView({
   frontDocs: Record<string, FrontDoc[]>
   onAddDoc: (front: string, doc: FrontDoc) => void
   onRemoveDoc: (front: string, docId: string) => void
+  frontResponsibles: Record<string, string[]>
+  onAddResponsible: (front: string, email: string) => void
+  onRemoveResponsible: (front: string, email: string) => void
 }) {
   const grouped = useMemo(() => {
     const map = new Map<string, EnrichedTask[]>()
@@ -1285,6 +1368,9 @@ function FrontView({
             docs={frontDocs[front] ?? []}
             onAddDoc={doc => onAddDoc(front, doc)}
             onRemoveDoc={docId => onRemoveDoc(front, docId)}
+            responsibles={frontResponsibles[front] ?? []}
+            onAddResponsible={email => onAddResponsible(front, email)}
+            onRemoveResponsible={email => onRemoveResponsible(front, email)}
           />
         ))}
         <AddFrontCard onAdd={onCreateFrente} />
@@ -1414,20 +1500,23 @@ export function VisaoGeral() {
   const [viewMode, setViewMode] = useState<ViewMode>('front')
   const [extraFronts, setExtraFronts] = useState<string[]>([])
   const [frontDocs, setFrontDocs] = useState<Record<string, FrontDoc[]>>({})
+  const [frontResponsibles, setFrontResponsibles] = useState<Record<string, string[]>>({})
   const savingRef = useRef<Map<string, Promise<void>>>(new Map())
 
   useEffect(() => {
     async function load() {
       try {
-        const [idx, tasks, profs, ct, docs] = await Promise.all([
+        const [idx, tasks, profs, ct, docs, responsibles] = await Promise.all([
           loadUsersIndex(),
           loadAllUserTasks(),
           loadAllProfiles(),
           loadCallout(),
           loadFrontDocs(),
+          loadFrontResponsibles(),
         ])
         setCallout(ct)
         setFrontDocs(docs)
+        setFrontResponsibles(responsibles)
         // Populate the shared TanStack Query cache so Usuarios and VisaoGeral
         // stay in sync from the very first load.
         queryClient.setQueryData(['users-index'], idx)
@@ -1572,6 +1661,13 @@ export function VisaoGeral() {
       saveFrontDocs(next).catch(() => {})
       return next
     })
+    setFrontResponsibles(prev => {
+      if (!prev[oldName]) return prev
+      const next = { ...prev, [newName]: prev[oldName] }
+      delete next[oldName]
+      saveFrontResponsibles(next).catch(() => {})
+      return next
+    })
   }
 
   function handleDeleteFrente(name: string) {
@@ -1585,6 +1681,12 @@ export function VisaoGeral() {
       const next = { ...prev }
       delete next[name]
       saveFrontDocs(next).catch(() => {})
+      return next
+    })
+    setFrontResponsibles(prev => {
+      const next = { ...prev }
+      delete next[name]
+      saveFrontResponsibles(next).catch(() => {})
       return next
     })
   }
@@ -1607,6 +1709,23 @@ export function VisaoGeral() {
     setFrontDocs(prev => {
       const next = { ...prev, [front]: (prev[front] ?? []).filter(d => d.id !== docId) }
       saveFrontDocs(next).catch(() => toast({ title: 'Erro ao salvar documento', variant: 'destructive' }))
+      return next
+    })
+  }
+
+  function handleAddFrontResponsible(front: string, email: string) {
+    setFrontResponsibles(prev => {
+      if ((prev[front] ?? []).includes(email)) return prev
+      const next = { ...prev, [front]: [...(prev[front] ?? []), email] }
+      saveFrontResponsibles(next).catch(() => toast({ title: 'Erro ao salvar responsável', variant: 'destructive' }))
+      return next
+    })
+  }
+
+  function handleRemoveFrontResponsible(front: string, email: string) {
+    setFrontResponsibles(prev => {
+      const next = { ...prev, [front]: (prev[front] ?? []).filter(e => e !== email) }
+      saveFrontResponsibles(next).catch(() => toast({ title: 'Erro ao salvar responsável', variant: 'destructive' }))
       return next
     })
   }
@@ -1728,6 +1847,9 @@ export function VisaoGeral() {
             frontDocs={frontDocs}
             onAddDoc={handleAddFrontDoc}
             onRemoveDoc={handleRemoveFrontDoc}
+            frontResponsibles={frontResponsibles}
+            onAddResponsible={handleAddFrontResponsible}
+            onRemoveResponsible={handleRemoveFrontResponsible}
           />
         )}
 
